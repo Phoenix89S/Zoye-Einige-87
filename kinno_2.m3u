@@ -1,0 +1,209 @@
+#EXTM3U
+#EXTINF:-1, Русский Иллюзион
+http://86.57.178.105:10823
+#EXTINF:-1, КИНО 24
+http://85.192.10.131/hls/Kino24Ru/playlist.m3u8
+#EXTINF:-1, Кино ТВ
+http://vod.tuva.ru/kinotv/index.m3u8
+#EXTINF:-1, НТВ Хит
+http://cdn.ntv.ru/th_hit/tracks-v1a1/mono.m3u8
+#EXTINF:-1, Родное кино
+http://iptv.mega.net.ru:8888/Rodnoe_kino/index.m3u8
+#EXTINF:-1, Дом кино Премиум HD
+http://188.113.190.15/91/tracks-v1a1/index.m3u8
+#EXTINF:-1, Поехали!
+http://188.113.190.15/206/tracks-v1a1/index.m3u8
+#EXTINF:-1, Комедия
+http://188.113.190.15/214/tracks-v1a1/index.m3u8
+#EXTINF:-1, Kinojam 2 HD
+https://live-mirror-12.ott.tricolor.tv/dtv/id861_MSKSG-PVR-1--Kinojam_2/03/plst.m3u8?drmreq=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhcHBfdHlwZSI6ImFwdHBfb3R0IiwiY2xhc3MiOiJCUk9XU0VSIiwiZHJlaWQiOiI0MTAyNTUwMDYwNTg4MiIsImV4cCI6MTY5MjczNTA3OCwiaHdpZCI6IjA1OTgxOTUwMjliODE3MzIxYTQ2MGE3M2QwNWRjNGY5M2I5ZmM0NjM5OWFlOWRmYzJlZTZiMGUwNDVhZWViYzkiLCJsYXN0X3JlcV9kYXRlIjoxNjkyMTMwMjc4LCJzZXNzaW9uX2lkIjoiOWNmODQ0NGJiOGM3NWI5NGFjNDJiM2JkNGI3ZWMxMzIiLCJ0b2tlbl90eXBlIjoiQ29udGVudEFjY2Vzc1Rva2VuIiwidHlwZSI6Ik1PWklMTEEifQ.hUXvl74L08qIrIia8T5RQVD8khzcJt-HW6HB1kR6Shc
+#EXTINF:-1, Kinojam 1 HD
+https://live-mirror-07.ott.tricolor.tv/dtv/id860_MSKSG-PVR-1--Kinojam_1/03/plst.m3u8?drmreq=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhcHBfdHlwZSI6ImFwdHBfb3R0IiwiY2xhc3MiOiJCUk9XU0VSIiwiZHJlaWQiOiI0MTAyNTUwMDYwNTg4MiIsImV4cCI6MTY5MjczNTA3OCwiaHdpZCI6IjA1OTgxOTUwMjliODE3MzIxYTQ2MGE3M2QwNWRjNGY5M2I5ZmM0NjM5OWFlOWRmYzJlZTZiMGUwNDVhZWViYzkiLCJsYXN0X3JlcV9kYXRlIjoxNjkyMTMwMjc4LCJzZXNzaW9uX2lkIjoiOWNmODQ0NGJiOGM3NWI5NGFjNDJiM2JkNGI3ZWMxMzIiLCJ0b2tlbl90eXBlIjoiQ29udGVudEFjY2Vzc1Rva2VuIiwidHlwZSI6Ik1PWklMTEEifQ.hUXvl74L08qIrIia8T5RQVD8khzcJt-HW6HB1kR6Shc
+#EXTINF:-1, Феникс+Кино
+http://188.113.190.15/24/mono.m3u8
+#EXTINF:-1, Хит FM
+http://hitfm.hostingradio.ru/hitfm128.mp3
+#EXTINF:-1, Bridge Classic
+http://188.113.190.15/302/tracks-v1a1/index.m3u8
+#EXTINF:-1, Кино ТВ
+http://vod.tuva.ru/kinotv/tracks-v1a1/mono.m3u8
+#EXTINF:-1, Наше радио
+http://nashe1.hostingradio.ru/nashespb128.mp3
+#EXTINF:-1, Наше радио
+http://nashe1.hostingradio.ru:80/nashe-256
+#EXTINF:-1, Amedia 2
+http://188.113.190.15/134/tracks-v1a1/index.m3u8
+#EXTINF:-1, Иллюзион+
+http://188.113.190.15/45/tracks-v1a1/index.m3u8
+#EXTINF:-1, Русский иллюзион
+http://195.26.83.96:7006/play/a00y/index.m3u8
+#EXTINF:-1, Кинокомедия HD
+http://188.113.190.15/334/video.m3u8
+#EXTINF:-1, Любимое кино
+http://188.113.190.15/53/tracks-v1a1/index.m3u8
+#EXTINF:-1, Русский иллюзион
+http://188.113.190.15/44/tracks-v1a1/index.m3u8
+#EXTINF:-1, .sci-fi
+http://188.113.190.15/23/tracks-v1a1/index.m3u8
+#EXTINF:-1, Кинокомедия
+http://188.113.190.15/129/tracks-v1a1/index.m3u8
+#EXTINF:-1, Киноман
+http://188.113.190.15/224/tracks-v1a1/index.m3u8
+#EXTINF:-1, Киноужас HD
+http://188.113.190.15/323/tracks-v1a1/index.m3u8
+#EXTINF:-1, Кинохит
+http://188.113.190.15/313/tracks-v1a1/index.m3u8
+#EXTINF:-1, Киномикс
+http://31.210.208.171:8080/kinomix/index.m3u8?token=+W2MSER
+#EXTINF:-1, tvg-id="4780" tvg-logo="https://upload.wikimedia.org/wikipedia/ru/d/da/Логотип_платформы_Смотрим.svg"Смотрим:Частный Детектив HD
+https://live-vgtrksmotrim.cdnvideo.ru/vgtrksmotrim/smotrim-live-01.smil/playlist.m3u8
+#EXTINF:-1, Любимое кино
+http://188.113.190.11/53/video.m3u8
+#EXTINF:-1, НТВ Хит
+http://cdn.ntv.ru/th_hit/tracks-v1a1/playlist.m3u8
+#EXTINF:-1, НТВ Хит
+http://cdn2.ntv.ru/th_hit/playlist.m3u8
+#EXTINF:-1, КиноКульт HD
+https://hls.peers.tv/streaming/filmcult/16/copy_a/playlist.m3u8
+#EXTINF:-1, Star Cinema HD
+https://hls.peers.tv/streaming/star_cinema_hd/16/variable.m3u8
+#EXTINF:-1, Капитан Фантастика HD
+http://stream1.cinerama.uz/1406/tracks-v1a1/mono.m3u8
+#EXTINF:-1, Kinojam 2 HD
+http://live-mirror-11.ott.tricolor.tv/dtv/id861_MSKSG-PVR-1--Kinojam_2/03/plst.m3u8?drmreq=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhcHBfdHlwZSI6ImFwdHBfb3R0IiwiY2xhc3MiOiJCUk9XU0VSIiwiZHJlaWQiOiI1NDIxOTAwNzk1ODc0MiIsImV4cCI6MTczOTE3NDQzOCwiaHdpZCI6IjYzN2VjMDBmZjA2YjFjNmFmZjA1NTk0MWMzZWM2NTVjODM0OGVmMTQ2Zjk1ZDlmODIyNGE4MjY0NzRjZjlhOTgiLCJsYXN0X3JlcV9kYXRlIjoxNzM4NTY5NjM4LCJzZXNzaW9uX2lkIjoiMTNkYWNjNDZiZjg1ZDJiODIwY2I3ZDEyYzU1MjNjZmEiLCJ0b2tlbl90eXBlIjoiQ29udGVudEFjY2Vzc1Rva2VuIiwidHlwZSI6Ik1PWklMTEEifQ.VRXZo4VO6eTTCQcmGRvYxwAxGYN8CKdtxi2sadY9k-A
+#EXTINF:-1, Комедия
+http://stream-msk-09.ott.tricolor.tv/dtv/id422_MSKSG-PVR-1--Komediya/03/plst.m3u8?drmreq=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhcHBfdHlwZSI6ImFwdHBfb3R0IiwiY2xhc3MiOiJCUk9XU0VSIiwiZHJlaWQiOiI1NDIxOTAwNzk1ODc0MiIsImV4cCI6MTczOTE3NDQzOCwiaHdpZCI6IjYzN2VjMDBmZjA2YjFjNmFmZjA1NTk0MWMzZWM2NTVjODM0OGVmMTQ2Zjk1ZDlmODIyNGE4MjY0NzRjZjlhOTgiLCJsYXN0X3JlcV9kYXRlIjoxNzM4NTY5NjM4LCJzZXNzaW9uX2lkIjoiMTNkYWNjNDZiZjg1ZDJiODIwY2I3ZDEyYzU1MjNjZmEiLCJ0b2tlbl90eXBlIjoiQ29udGVudEFjY2Vzc1Rva2VuIiwidHlwZSI6Ik1PWklMTEEifQ.VRXZo4VO6eTTCQcmGRvYxwAxGYN8CKdtxi2sadY9k-A
+#EXTINF:-1, Kinojam 1 HD
+http://live-mirror-04.ott.tricolor.tv/dtv/id860_MSKSG-PVR-1--Kinojam_1/03/plst.m3u8?drmreq=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhcHBfdHlwZSI6ImFwdHBfb3R0IiwiY2xhc3MiOiJCUk9XU0VSIiwiZHJlaWQiOiI1NDIxOTAwNzk1ODc0MiIsImV4cCI6MTczOTE3NDQzOCwiaHdpZCI6IjYzN2VjMDBmZjA2YjFjNmFmZjA1NTk0MWMzZWM2NTVjODM0OGVmMTQ2Zjk1ZDlmODIyNGE4MjY0NzRjZjlhOTgiLCJsYXN0X3JlcV9kYXRlIjoxNzM4NTY5NjM4LCJzZXNzaW9uX2lkIjoiMTNkYWNjNDZiZjg1ZDJiODIwY2I3ZDEyYzU1MjNjZmEiLCJ0b2tlbl90eXBlIjoiQ29udGVudEFjY2Vzc1Rva2VuIiwidHlwZSI6Ik1PWklMTEEifQ.VRXZo4VO6eTTCQcmGRvYxwAxGYN8CKdtxi2sadY9k-A
+#EXTINF:-1, Киноман
+https://hls.peers.tv/streaming/kinosat/16/tvrecw/playlist.m3u8
+#EXTINF:-1, Кинопоказ
+https://hls.peers.tv/streaming/kinopokaz/16/copy/playlist.m3u8
+#EXTINF:-1, Дом Кино
+https://streaming.thestream.cyou/live/44-req_offset_28000000-req_window_0-1k_v5.m3u8
+#EXTINF:-1, Еврокино
+http://31.210.208.171:8080/evrokino/index.m3u8?token=+W2MSER
+#EXTINF:-1, Bridge Classic
+http://31.210.208.171:8080/bridge/index.m3u8?token=+W2MSER
+#EXTINF:-1, Детское кино Int.
+https://cdn4.skygo.mn/live/disk1/Karusel/HLSv3-FTA/Karusel.m3u8
+#EXTINF:-1, Retrovision Movies
+http://fl1001.bozztv.com/ushba-rvisionmovies/tracks-v1a1/mono.m3u8
+#EXTINF:-1, Retrovision Classic
+http://fl1001.bozztv.com/ushba-rvisionclassic/tracks-v1a1/mono.m3u8
+#EXTINF:-1, Retrovision Кинопанорама
+http://fl1001.bozztv.com/ushba-rvisionkinopanorama/tracks-v1a1/mono.m3u8
+#EXTINF:-1, НТВ Хит
+https://cdn.ntv.ru/th_style/playlist.m3u8
+#EXTINF:-1, Retrovision Classic
+https://fl1001.bozztv.com/ushba-rvisionclassic/tracks-v1a1/mono.m3u8
+#EXTINF:-1, Retrovision Movies
+https://fl1001.bozztv.com/ushba-rvisionmovies/tracks-v1a1/mono.m3u8
+#EXTINF:-1, Retrovision Кинопанорама
+https://fl1001.bozztv.com/ushba-rvisionkinopanorama/tracks-v1a1/mono.m3u8
+#EXTINF:-1, Хит FM
+http://hitfm.hostingradio.ru/hitfm96.aacp
+#EXTINF:-1, Капитан Фантастика HD
+https://stream8.cinerama.uz/1406/tracks-v1a1/mono.m3u8
+#EXTINF:-1, Amedia Premium HD
+http://45.145.32.13:20440/amedia_premium_hd/index.m3u8?token=test
+#EXTINF:-1, Bollywood HD
+http://45.145.32.13:20440/bollywood_hd/index.m3u8?token=test
+#EXTINF:-1, FlixSnip
+http://45.145.32.13:20440/flixsnip/index.m3u8?token=test
+#EXTINF:-1, Дом Кино
+https://stream8.cinerama.uz/1054/tracks-v1a1/mono.m3u8
+#EXTINF:-1, Иллюзион+
+http://176.118.197.101/Illuzion+/index.m3u8
+#EXTINF:-1, Еврокино
+http://176.118.197.101/Evrokino/index.m3u8
+#EXTINF:-1, Bollywood HD
+http://176.118.197.101/Bollywood_HD/index.m3u8
+#EXTINF:-1, Cartoon Classics
+http://5.188.159.128:8070/Cartoon_Network/index.m3u8
+#EXTINF:-1, Смотрим 100% Классика
+https://player.smotrim.ru/iframe/stream/live_id/78a66c7c-df38-4091-b2e1-9eeeb4c96338
+#EXTINF:-1, Любимое Кино
+http://176.118.197.101/LubimoeKino/index.m3u8
+#EXTINF:-1, КиноСезон
+http://stitch.teletarget.ru/vintera/movieseason/index.m3u8
+#EXTINF:-1, Комедия
+http://176.118.197.101/Komediya/index.m3u8
+#EXTINF:-1, Советское кино
+http://stitch.teletarget.ru/vintera/sovietmovie/index.m3u8
+#EXTINF:-1, Viju TV1000 русское
+http://cef23ac9.rossteleccom.net/iptv/HR5L3HVVC7ZQSVB2DUVSQUH7/101/index.m3u8
+#EXTINF:-1, Русский Иллюзион
+http://cef23ac9.rossteleccom.net/iptv/HR5L3HVVC7ZQSVB2DUVSQUH7/547/index.m3u8
+#EXTINF:-1, Любимое Кино
+http://46.32.176.50/lubimoekino/index.m3u8
+#EXTINF:-1, Русский детектив
+http://46.32.176.50/russkiydetektiv/index.m3u8
+#EXTINF:-1, Сити Эдем - КиноАзия
+https://cityeden.catcast.tv/content/34393/index.m3u8
+#EXTINF:-1, Сити Эдем - КиноКлассика
+https://cityeden.catcast.tv/content/34185/index.m3u8
+#EXTINF:-1, Сити Эдем - КиноМистика
+https://cityeden.catcast.tv/content/40783/index.m3u8
+#EXTINF:-1, Сити Эдем - КиноЭкшен
+https://cityeden.catcast.tv/content/41333/index.m3u8
+#EXTINF:-1, Cinema
+http://176.118.197.101/Cinema/index.m3u8
+#EXTINF:-1, Любимое Кино
+http://31.210.208.171:8080/lubimoe_kino/index.m3u8?token=+W2MSER
+#EXTINF:-1, Bridge Classic
+http://stream.mcquack.net/272/index.m3u8
+#EXTINF:-1, .sci-fi
+http://stream.mcquack.net/180/index.m3u8
+#EXTINF:-1, Amedia 1
+http://iptv.mega.net.ru:8888/A1/index.m3u8
+#EXTINF:-1, Amedia 2
+http://iptv.mega.net.ru:8888/A2/index.m3u8
+#EXTINF:-1, Amedia Hit
+http://stream.mcquack.net/162/index.m3u8
+#EXTINF:-1, Bollywood HD
+http://iptv.mega.net.ru:8888/Bollywood_HD/index.m3u8
+#EXTINF:-1, Cinema
+http://iptv.mega.net.ru:8888/Cinema/index.m3u8
+#EXTINF:-1, Kino 24
+http://192.162.64.99:5200/play/a01w/index.m3u8
+#EXTINF:-1, Viju TV1000
+http://stream.mcquack.net/110/index.m3u8
+#EXTINF:-1, Viju TV1000 Action
+http://stream.mcquack.net/100/index.m3u8
+#EXTINF:-1, Viju+ comedy
+http://flussonic.mkpnet.ru/tv-c385ec3bab3a3605/video.m3u8
+#EXTINF:-1, Иллюзион+
+http://iptv.mega.net.ru:8888/Illuzion_/index.m3u8
+#EXTINF:-1, Киноман
+http://flussonic.mkpnet.ru/tv-e055808223a74709/video.m3u8
+#EXTINF:-1, Viju TV1000 русское
+http://flussonic.mkpnet.ru/tv-7510472b0133abb2/video.m3u8
+#EXTINF:-1, Дом Кино Премиум HD
+http://iptv.mega.net.ru:8888/Dom_Kino_Premium_HD/index.m3u8
+#EXTINF:-1, Комедия
+http://192.162.64.99:5100/play/a02k/index.m3u8
+#EXTINF:-1, Русский детектив
+http://flussonic.mkpnet.ru/tv-2997fed720614567/video.m3u8
+#EXTINF:-1, Русский Иллюзион
+http://fs.uplink.kz/russkiy_illusion/tracks-v1a1/mono.ts.m3u8?token=onlinetv
+#EXTINF:-1, Retrovision Classic
+https://lbgo.bozztv.com/07/ushba-rvisionclassic/tracks-v1a1/mono.m3u8
+#EXTINF:-1, Retrovision Movies
+https://lbgo.bozztv.com/07/ushba-rvisionmovies/tracks-v1a1/mono.m3u8
+#EXTINF:-1, Retrovision Кинопанорама
+https://lbgo.bozztv.com/07/ushba-rvisionkinopanorama/tracks-v1a1/mono.m3u8
+#EXTINF:-1, Поехали!
+http://iptv.mega.net.ru:8888/Poehali/index.m3u8
+#EXTINF:-1, Amedia Premium HD
+http://iptv.mega.net.ru:8888/Amedia_Premium_HD/index.m3u8
+#EXTINF:-1, Кино ТВ
+http://194.152.35.17/kino-tv/index.m3u8
+#EXTINF:-1, Viju TV1000 русское
+http://iptv.mega.net.ru:8888/TV1000_Russkoe_kino/index.m3u8
+#EXTINF:-1, Дом Кино
+http://iptv.mega.net.ru:8888/Dom_kino/index.m3u8
+#EXTINF:-1, Мосфильм. Золотая коллекция
+http://178.134.1.158:8081/mosfilm/index.m3u8
+#EXTINF:-1, Русский детектив
+http://192.162.64.99:5100/play/a021/index.m3u8
