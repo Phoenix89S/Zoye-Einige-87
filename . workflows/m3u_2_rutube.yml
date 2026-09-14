@@ -1,0 +1,108 @@
+name: m3u_2_rutube
+
+on:
+  workflow_dispatch:
+
+jobs:
+  m3u_2_rutube:
+    name: m3u_2_rutube
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install "requests>=2.31,<3"
+
+      - name: Download m3u_2_rutube.py
+        run: |
+          curl -L \
+            "https://raw.githubusercontent.com/Phoenix89S/Zoye-Einige-87/main/m3u_2_rutube.py" \
+            -o m3u_2_rutube.py
+
+      - name: Check Python syntax
+        run: |
+          python -m py_compile m3u_2_rutube.py
+
+      - name: Run m3u_2_rutube
+        env:
+          RUTUBE_PHONE: ${{ secrets.RUTUBE_PHONE }}
+          RUTUBE_PASSWORD: ${{ secrets.RUTUBE_PASSWORD }}
+          RUTUBE_TEST_STREAMS: "0"
+          RUTUBE_TV_ONLY_ALIVE: "0"
+          RUTUBE_MAX_PAGES: "100"
+          RUTUBE_CATEGORY_MAX_PAGES: "100"
+          PYTHONUNBUFFERED: "1"
+        run: |
+          python m3u_2_rutube.py
+
+      - name: Show generated files
+        if: always()
+        run: |
+          echo "===== GENERATED FILES ====="
+          find . -maxdepth 3 -type f | sort
+
+          echo "===== RUTUBE OUTPUT ====="
+          if [ -d "rutube_output" ]; then
+            find rutube_output -type f | sort
+          else
+            echo "rutube_output not found"
+          fi
+
+      - name: Upload m3u_2_rutube results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: m3u_2_rutube
+          path: |
+            rutube_output/
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Upload M3U
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: m3u_2_rutube-playlists
+          path: |
+            *.m3u
+            *.m3u8
+            rutube_output/**/*.m3u
+            rutube_output/**/*.m3u8
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Upload JSON and ML data
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: m3u_2_rutube-data
+          path: |
+            *.json
+            *.jsonl
+            rutube_output/**/*.json
+            rutube_output/**/*.jsonl
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Upload logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: m3u_2_rutube-logs
+          path: |
+            *.log
+            *.txt
+            rutube_output/**/*.log
+            rutube_output/**/*.txt
+          if-no-files-found: warn
+          retention-days: 30
