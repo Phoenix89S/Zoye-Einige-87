@@ -1,0 +1,230 @@
+name: Rutube Full Scraper
+
+on:
+  workflow_dispatch:
+    inputs:
+      video_id:
+        description: "Rutube video ID"
+        required: true
+        type: string
+
+      test_streams:
+        description: "Проверять доступность HLS-потоков"
+        required: true
+        default: true
+        type: boolean
+
+      timeout:
+        description: "HTTP timeout, seconds"
+        required: true
+        default: "30"
+        type: string
+
+      output_name:
+        description: "Output directory"
+        required: true
+        default: "rutube_output"
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    env:
+      RUTUBE_PHONE: ${{ secrets.RUTUBE_PHONE }}
+      RUTUBE_PASSWORD: ${{ secrets.RUTUBE_PASSWORD }}
+
+    steps:
+
+      # =========================================================
+      # CHECKOUT
+      # =========================================================
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # =========================================================
+      # PYTHON
+      # =========================================================
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      # =========================================================
+      # DOWNLOAD CURRENT SCRAPER
+      # =========================================================
+      - name: Download m3u_rutube.py
+        run: |
+          mkdir -p scraper
+
+          curl -fL \
+            "https://raw.githubusercontent.com/Phoenix89S/Zoye-Einige-87/main/m3u_rutube.py" \
+            -o scraper/m3u_rutube.py
+
+          echo "===== SCRAPER INFO ====="
+          ls -lh scraper/m3u_rutube.py
+
+          echo "===== SCRAPER HEADER ====="
+          head -n 30 scraper/m3u_rutube.py
+
+      # =========================================================
+      # INSTALL DEPENDENCIES
+      # =========================================================
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install "requests>=2.31,<3"
+
+      # =========================================================
+      # CHECK CREDENTIALS
+      # =========================================================
+      - name: Check credentials
+        run: |
+          if [ -z "$RUTUBE_PHONE" ]; then
+            echo "::error::RUTUBE_PHONE secret is not set"
+            exit 1
+          fi
+
+          if [ -z "$RUTUBE_PASSWORD" ]; then
+            echo "::error::RUTUBE_PASSWORD secret is not set"
+            exit 1
+          fi
+
+          echo "Rutube credentials are configured."
+
+      # =========================================================
+      # PREPARE OUTPUT
+      # =========================================================
+      - name: Prepare output
+        run: |
+          mkdir -p "${{ inputs.output_name }}"
+
+          echo "Output directory:"
+          pwd
+          echo "${{ inputs.output_name }}"
+
+      # =========================================================
+      # RUN RUTUBE SCRAPER
+      # =========================================================
+      - name: Run m3u_rutube.py
+        run: |
+          CMD=(
+            python scraper/m3u_rutube.py
+            "${{ inputs.video_id }}"
+            --phone "$RUTUBE_PHONE"
+            --password "$RUTUBE_PASSWORD"
+            --output "${{ inputs.output_name }}"
+            --timeout "${{ inputs.timeout }}"
+          )
+
+          if [ "${{ inputs.test_streams }}" != "true" ]; then
+            CMD+=(--no-test)
+          fi
+
+          echo "===== START SCRAPER ====="
+          echo "Video ID: ${{ inputs.video_id }}"
+          echo "Stream testing: ${{ inputs.test_streams }}"
+          echo "Timeout: ${{ inputs.timeout }} seconds"
+          echo "========================="
+
+          "${CMD[@]}"
+
+      # =========================================================
+      # SHOW GENERATED FILES
+      # =========================================================
+      - name: Show generated files
+        if: always()
+        run: |
+          echo "========================================"
+          echo "GENERATED FILES"
+          echo "========================================"
+
+          if [ -d "${{ inputs.output_name }}" ]; then
+            find "${{ inputs.output_name }}" \
+              -type f \
+              -printf '%p\n' | sort
+          else
+            echo "Output directory does not exist."
+          fi
+
+      # =========================================================
+      # SHOW FILE SIZES
+      # =========================================================
+      - name: Show output sizes
+        if: always()
+        run: |
+          echo "========================================"
+          echo "FILE SIZES"
+          echo "========================================"
+
+          if [ -d "${{ inputs.output_name }}" ]; then
+            find "${{ inputs.output_name }}" \
+              -type f \
+              -exec ls -lh {} \;
+          fi
+
+      # =========================================================
+      # UPLOAD ALL RESULTS
+      # =========================================================
+      - name: Upload full results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rutube-${{ inputs.video_id }}
+          path: ${{ inputs.output_name }}/
+          if-no-files-found: warn
+          retention-days: 30
+
+      # =========================================================
+      # UPLOAD ML DATASET
+      # =========================================================
+      - name: Upload ML dataset
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rutube-ml-${{ inputs.video_id }}
+          path: |
+            ${{ inputs.output_name }}/*.json
+            ${{ inputs.output_name }}/*_ml.jsonl
+          if-no-files-found: warn
+          retention-days: 90
+
+      # =========================================================
+      # GITHUB SUMMARY
+      # =========================================================
+      - name: Job summary
+        if: always()
+        run: |
+          echo "## Rutube Full Scraper" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+
+          echo "**Video ID:** \`${{ inputs.video_id }}\`" \
+            >> "$GITHUB_STEP_SUMMARY"
+
+          echo "**Stream testing:** \`${{ inputs.test_streams }}\`" \
+            >> "$GITHUB_STEP_SUMMARY"
+
+          echo "**HTTP timeout:** \`${{ inputs.timeout }}s\`" \
+            >> "$GITHUB_STEP_SUMMARY"
+
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+
+          echo "### Generated files" \
+            >> "$GITHUB_STEP_SUMMARY"
+
+          if [ -d "${{ inputs.output_name }}" ]; then
+            find "${{ inputs.output_name }}" \
+              -type f \
+              -printf '%f\n' \
+              2>/dev/null \
+              | sort \
+              | sed 's/^/- /' \
+              >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "- No output directory created" \
+              >> "$GITHUB_STEP_SUMMARY"
+          fi
