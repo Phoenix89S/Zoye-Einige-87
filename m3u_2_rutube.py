@@ -140,7 +140,7 @@ except ImportError:
 # ============================================================
 
 
-VERSION = "2.1.0-TV-AUTONOMOUS"
+VERSION = "2.2.0-TV-SHELF-CARDS"
 
 
 
@@ -2762,405 +2762,69 @@ class RutubeScrapper:
         category: str,
         page_url: str,
     ) -> List[Dict[str, Any]]:
+        """
+        Extract ONLY real Rutube TV live cards.
 
+        IMPORTANT:
+        - Do not scan arbitrary /video/<id> links.
+        - Do not scan arbitrary JSON ``id`` fields.
+        - A channel occurrence is represented by a real /live/video/<id> URL.
+        - The same channel may occur on several shelves/pages; those
+          occurrences are intentionally preserved.
+        - Repeated references to the same card inside one HTML page are
+          markup duplicates, not additional catalog occurrences, so the
+          exact same live URL is emitted only once per page.
+        """
 
-        records: List[
-            Dict[str, Any]
-        ] = []
-
-
-        # ----------------------------------------------------
-        # Технические / служебные ID и object_id, которые
-        # НЕ являются реальными TV/live-карточками каналов.
-        # Их нельзя считать video_id каналов.
-        # ----------------------------------------------------
-
-
-        TECHNICAL_IDS = {
-            "tvfavorites",
-            "history",
-            "topic",
-            "assets",
-            "banner-premier",
-            "banner",
-            "autowidget",
-            "feedsource",
-            "tvarchive",
-            "continue_watch",
-            "popular_in_live",
-            "live_by_topic",
-            "tv_channel_cards",
-            "subscriptiontvseries",
-            "promogroup",
-            "cardgroup",
-            "automaticwidget",
-        }
-
-
-        def _is_technical_id(vid: str) -> bool:
-            if not vid:
-                return True
-            low = vid.lower().strip()
-            if low in TECHNICAL_IDS:
-                return True
-            if low.startswith(("banner-", "widget-", "auto-")):
-                return True
-            # Слишком короткие или чисто числовые object_id
-            # часто бывают служебными.
-            if low.isdigit() and len(low) < 8:
-                return True
-            return False
-
-
-        # ----------------------------------------------------
-        # METHOD 1 (приоритетный):
-        # Реальные live-карточки: /live/video/ID
-        # ----------------------------------------------------
-
+        records: List[Dict[str, Any]] = []
+        seen_on_this_page = set()
 
         live_pattern = re.compile(
-            r"""
-            (?:
-                ["']
-                |
-                \b
-            )
-            (?P<href>
-                (?:https?://rutube\.ru)?
-                /live/video/
-                (?P<id>[A-Za-z0-9_-]{10,})
-                /?
-            )
-            (?:
-                ["']
-                |
-                \b
-            )
-            """,
-            re.IGNORECASE
-            | re.VERBOSE,
+            r"(?P<href>(?:https?://rutube\.ru)?/live/video/(?P<id>[A-Za-z0-9_-]{10,})/?)",
+            re.IGNORECASE,
         )
 
-
         for match in live_pattern.finditer(page_html):
-
-
             video_id = match.group("id")
-
-
-            if not video_id or _is_technical_id(video_id):
+            if not video_id:
                 continue
 
+            # Normalize only the card URL for the local markup check.
+            # We deliberately DO NOT use this as global deduplication.
+            card_key = video_id.lower()
+            if card_key in seen_on_this_page:
+                continue
+            seen_on_this_page.add(card_key)
 
             position = match.start()
-
-
-            context_start = max(0, position - 6000)
-            context_end = min(len(page_html), position + 6000)
+            context_start = max(0, position - 3500)
+            context_end = min(len(page_html), position + 3500)
             context = page_html[context_start:context_end]
 
-
-            title = self._extract_title_from_context(
-                context, video_id
-            )
-
-
+            title = self._extract_title_from_context(context, video_id)
             logo = self._extract_logo_from_context(context)
 
+            # Never let generic UI text become a channel name.
+            bad_titles = {
+                "rutube", "rutube tv", "прямой эфир",
+                "live", "сейчас", "смотреть",
+                "главная", "телеканалы",
+            }
+            if title.strip().lower() in bad_titles:
+                title = f"Rutube {video_id}"
 
-            record = {
+            records.append({
                 "video_id": video_id,
                 "title": title,
                 "category": category,
                 "source_url": page_url,
-                "catalog_url": (
-                    f"https://rutube.ru/live/video/{video_id}/"
-                ),
+                "catalog_url": f"https://rutube.ru/live/video/{video_id}/",
                 "logo": logo,
                 "card_type": "live",
-                "discovered_at": datetime.now(
-                    timezone.utc
-                ).isoformat(),
-            }
-
-
-            records.append(record)
-
-
-        # ----------------------------------------------------
-        # METHOD 2:
-        # Обычные /video/ID (с фильтром технических).
-        # ----------------------------------------------------
-
-
-        video_pattern = re.compile(
-            r"""
-            (?:
-                ["']
-                |
-                \b
-            )
-            (?P<href>
-                (?:https?://rutube\.ru)?
-                /video/
-                (?P<id>[A-Za-z0-9_-]{10,})
-                /?
-            )
-            (?:
-                ["']
-                |
-                \b
-            )
-            """,
-            re.IGNORECASE
-            | re.VERBOSE,
-        )
-
-
-        matches = list(
-            video_pattern.finditer(
-                page_html
-            )
-        )
-
-
-        for match in matches:
-
-
-            video_id = (
-                match.group("id")
-            )
-
-
-            if not video_id or _is_technical_id(video_id):
-                continue
-
-
-            position = match.start()
-
-
-            context_start = max(
-                0,
-                position - 6000,
-            )
-
-
-            context_end = min(
-                len(page_html),
-                position + 6000,
-            )
-
-
-            context = page_html[
-                context_start:
-                context_end
-            ]
-
-
-            # Дополнительная проверка контекста:
-            # предпочитаем карточки с признаками live / эфир.
-            context_low = context.lower()
-            has_live_hint = any(
-                hint in context_low
-                for hint in (
-                    "прямой эфир",
-                    "is_livestream",
-                    "is_live",
-                    "live_streams",
-                    "в эфире",
-                    "livestream",
-                    "live-video",
-                )
-            )
-
-
-            title = (
-                self._extract_title_from_context(
-                    context,
-                    video_id,
-                )
-            )
-
-
-            logo = (
-                self._extract_logo_from_context(
-                    context
-                )
-            )
-
-
-            record = {
-                "video_id":
-                    video_id,
-
-
-                "title":
-                    title,
-
-
-                "category":
-                    category,
-
-
-                "source_url":
-                    page_url,
-
-
-                "catalog_url":
-                    (
-                        "https://rutube.ru/video/"
-                        f"{video_id}/"
-                    ),
-
-
-                "logo":
-                    logo,
-
-
-                "card_type":
-                    "live_hint" if has_live_hint else "video",
-
-
-                "discovered_at":
-                    datetime.now(
-                        timezone.utc
-                    ).isoformat(),
-            }
-
-
-            records.append(
-                record
-            )
-
-
-
-        # ----------------------------------------------------
-        # METHOD 3:
-        # Embedded JSON / escaped JSON.
-        #
-        # Некоторые версии RUTUBE могут не держать
-        # карточки обычными href в HTML.
-        # Поэтому ищем video_id ещё раз в JSON-подобных
-        # конструкциях.
-        #
-        # И здесь тоже НЕТ дедупликации.
-        # Технические ID отфильтровываются.
-        # ----------------------------------------------------
-
-
-        json_patterns = [
-            re.compile(
-                r'"videoId"\s*:\s*"([A-Za-z0-9_-]{10,})"',
-                re.IGNORECASE,
-            ),
-
-
-            re.compile(
-                r'"video_id"\s*:\s*"([A-Za-z0-9_-]{10,})"',
-                re.IGNORECASE,
-            ),
-
-
-            re.compile(
-                r'"id"\s*:\s*"([A-Za-z0-9_-]{10,})"'
-                r'[^{}]{0,300}'
-                r'"is_livestream"\s*:\s*true',
-                re.IGNORECASE,
-            ),
-        ]
-
-
-        for pattern in json_patterns:
-
-
-            for match in pattern.finditer(
-                page_html
-            ):
-
-
-                video_id = (
-                    match.group(1)
-                )
-
-
-                if not video_id or _is_technical_id(video_id):
-                    continue
-
-
-                position = match.start()
-
-
-                context_start = max(
-                    0,
-                    position - 4000,
-                )
-
-
-                context_end = min(
-                    len(page_html),
-                    position + 4000,
-                )
-
-
-                context = page_html[
-                    context_start:
-                    context_end
-                ]
-
-
-                title = (
-                    self._extract_title_from_context(
-                        context,
-                        video_id,
-                    )
-                )
-
-
-                logo = (
-                    self._extract_logo_from_context(
-                        context
-                    )
-                )
-
-
-                records.append({
-                    "video_id":
-                        video_id,
-
-
-
-                    "title":
-                        title,
-
-
-                    "category":
-                        category,
-
-
-                    "source_url":
-                        page_url,
-
-
-                    "catalog_url":
-                        (
-                            "https://rutube.ru/video/"
-                            f"{video_id}/"
-                        ),
-
-
-                    "logo":
-                        logo,
-
-
-                    "discovered_at":
-                        datetime.now(
-                            timezone.utc
-                        ).isoformat(),
-                })
-
+                "discovered_at": datetime.now(timezone.utc).isoformat(),
+            })
 
         return records
-
 
     # ========================================================
     # TITLE EXTRACTION
