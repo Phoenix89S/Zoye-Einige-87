@@ -71,10 +71,10 @@ https://bl.rutube.ru/livestream/5bbff90167d1b1d88fda92376ec7a651/index.m3u8?s=of
 #EXTINF:-1 tvg-id="rutube_5bbff90167d1b1d88fda92376ec7a651" tvg-name="Че" group-title="Рутуб кабельная" tvg-group="Рутуб кабельная/Все эфиры" subgroup-title="Все эфиры" tvg-logo="https://pic.rtbcdn.ru/user/1f/79/1f7921d6d623ef9459152aefef2dd3e7.jpg",77.2 Че
 #EXTVLCOPT:http-user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36
 https://bl.rutube.ru/livestream/5bbff90167d1b1d88fda92376ec7a651/index.m3u8?s=ofDiK2FzIXCIMEQsUSVIRw&e=2089472539&scheme=https
-#EXTINF:-1 tvg-id="rutube_faa934385b83f9e8a92f5484defae5fa" tvg-name="Официальный канал" group-title="Рутуб кабельная" tvg-group="Рутуб кабельная/Все эфиры" subgroup-title="Все эфиры" tvg-logo="https://pic.rtbcdn.ru/user/2025-04-02/9f/6c/9f6ce6521ba7b5cc82aa668c5feb9544.jpg",Официальный канал
+#EXTINF:-1 tvg-id="rutube_faa934385b83f9e8a92f5484defae5fa" tvg-name="ОТР" group-title="Рутуб кабельная" tvg-group="Рутуб кабельная/Все эфиры" subgroup-title="Все эфиры" tvg-logo="https://pic.rtbcdn.ru/user/2025-04-02/9f/6c/9f6ce6521ba7b5cc82aa668c5feb9544.jpg",9.1 ОТР
 #EXTVLCOPT:http-user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36
 https://bl.rutube.ru/livestream/faa934385b83f9e8a92f5484defae5fa/index.m3u8?s=Or0sP_pZXEhCTQ2HgZtSRg&e=2089472540&scheme=https
-#EXTINF:-1 tvg-id="rutube_faa934385b83f9e8a92f5484defae5fa" tvg-name="Официальный канал" group-title="Рутуб кабельная" tvg-group="Рутуб кабельная/Все эфиры" subgroup-title="Все эфиры" tvg-logo="https://pic.rtbcdn.ru/user/2025-04-02/9f/6c/9f6ce6521ba7b5cc82aa668c5feb9544.jpg",Официальный канал
+#EXTINF:-1 tvg-id="rutube_faa934385b83f9e8a92f5484defae5fa" tvg-name="ОТР" group-title="Рутуб кабельная" tvg-group="Рутуб кабельная/Все эфиры" subgroup-title="Все эфиры" tvg-logo="https://pic.rtbcdn.ru/user/2025-04-02/9f/6c/9f6ce6521ba7b5cc82aa668c5feb9544.jpg",9.2 ОТР
 #EXTVLCOPT:http-user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36
 https://bl.rutube.ru/livestream/faa934385b83f9e8a92f5484defae5fa/index.m3u8?s=Or0sP_pZXEhCTQ2HgZtSRg&e=2089472540&scheme=https
 #EXTINF:-1 tvg-id="rutube_32dc45cf878497abe1c9695e228f039b" tvg-name="Официальный канал" group-title="Рутуб кабельная" tvg-group="Рутуб кабельная/Все эфиры" subgroup-title="Все эфиры" tvg-logo="https://pic.rtbcdn.ru/user/2026-01-16/28/9e/289eb073bc7ac621aa65f50fd016f5f7.jpg",Официальный канал
