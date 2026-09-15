@@ -2,18 +2,28 @@
 # -*- coding: utf-8 -*-
 
 
+
+
 """
 Rutube Full Scraper / Analyzer + Autonomous RUTUBE TV Discovery
 
 
+
+
 РЕЖИМЫ:
+
+
 
 
 1. Автономный режим:
        python m3u_rutube.py
 
 
+
+
    Ничего вводить не требуется.
+
+
 
 
    Скрипт:
@@ -33,10 +43,16 @@ Rutube Full Scraper / Analyzer + Autonomous RUTUBE TV Discovery
        - продолжает работу при ошибке отдельного канала.
 
 
+
+
 2. Старый режим одного видео:
 
 
+
+
        python m3u_rutube.py VIDEO_ID
+
+
 
 
    Сохраняется исходная логика:
@@ -50,7 +66,11 @@ Rutube Full Scraper / Analyzer + Autonomous RUTUBE TV Discovery
        - JSON/TXT/M3U/JSONL.
 
 
+
+
 ВАЖНЫЕ ПРАВИЛА TV DISCOVERY:
+
+
 
 
     - НИКАКОЙ ДЕДУПЛИКАЦИИ.
@@ -102,7 +122,13 @@ Discovery — источник того, ЧТО собирать.
 """
 
 
+
+
+
+
 from __future__ import annotations
+
+
 
 
 import argparse
@@ -114,6 +140,9 @@ import os
 import re
 import sys
 import time
+import zipfile
+
+
 
 
 from dataclasses import dataclass, asdict, field
@@ -129,8 +158,12 @@ from urllib.parse import (
 )
 
 
+
+
 import requests
 from requests.adapters import HTTPAdapter
+
+
 
 
 try:
@@ -139,17 +172,39 @@ except ImportError:
     Retry = None
 
 
+
+
+
+
+
+
 # ============================================================
 # VERSION
 # ============================================================
 
 
-VERSION = "2.2.0-TV-SHELF-CARDS"
+
+
+VERSION = "2.4.0-TV-ARTIFACT-400-BL-FULL"
+
+# Полный опрос конкретных balancer HLS URL.
+# Важно: это не каталог и не бесконечный crawler домена.
+BL_RUTUBE_POLL_WORKERS = int(os.getenv("BL_RUTUBE_POLL_WORKERS", "200"))
+BL_RUTUBE_POLL_TIMEOUT = float(os.getenv("BL_RUTUBE_POLL_TIMEOUT", "12"))
+BL_RUTUBE_MAX_BODY_BYTES = int(os.getenv("BL_RUTUBE_MAX_BODY_BYTES", str(1024 * 1024)))
+
+
+
+
+
+
 
 
 # ============================================================
 # AUTONOMOUS TV CONFIGURATION
 # ============================================================
+
+
 
 
 # ЕДИНСТВЕННЫЙ основной источник.
@@ -159,12 +214,16 @@ VERSION = "2.2.0-TV-SHELF-CARDS"
 DISCOVERY_SOURCE_URL = "https://rutube.ru/feeds/live/"
 
 
+
+
 # Дополнительный официальный каталог телепрограмм.
 #
 # Он используется как второй discovery-source.
 TV_PROGRAM_SOURCE_URL = (
     "https://rutube.ru/feeds/live/tvprogramm/"
 )
+
+
 
 
 # Общий каталог.
@@ -180,53 +239,83 @@ FALLBACK_CATEGORY_URLS = {
         "https://rutube.ru/feeds/live/tvprogramm/federal/",
 
 
+
+
     "Региональные":
         "https://rutube.ru/feeds/live/tvprogramm/regional/",
+
+
 
 
     "Новости":
         "https://rutube.ru/feeds/live/tvprogramm/news/",
 
 
+
+
     "Развлекательные":
         "https://rutube.ru/feeds/live/tvprogramm/entertainment/",
+
+
 
 
     "Кино и сериалы":
         "https://rutube.ru/feeds/live/tvprogramm/movie/",
 
 
+
+
     "Спорт":
         "https://rutube.ru/feeds/live/tvprogramm/sport/",
+
+
 
 
     "Детские":
         "https://rutube.ru/feeds/live/tvprogramm/kids/",
 
 
+
+
     "Мультфильмы":
         "https://rutube.ru/feeds/live/tvprogramm/cartoons/",
+
+
 
 
     "Музыка":
         "https://rutube.ru/feeds/live/tvprogramm/music/",
 
 
+
+
     "Познавательные":
         "https://rutube.ru/feeds/live/tvprogramm/educational/",
+
+
 
 
     "Телемагазин":
         "https://rutube.ru/feeds/live/tvprogramm/teleshop/",
 
 
+
+
     "18+":
         "https://rutube.ru/feeds/live/tvprogramm/18/",
+
+
 
 
     "Религия":
         "https://rutube.ru/feeds/live/tvprogramm/religion/",
 }
+
+
+
+
+
+
 
 
 # Максимальное число страниц одной категории.
@@ -238,6 +327,12 @@ FALLBACK_CATEGORY_URLS = {
 DEFAULT_MAX_PAGES = 100
 
 
+
+
+
+
+
+
 # Если страница содержит хотя бы один найденный video ID,
 # продолжаем постраничный обход.
 #
@@ -245,12 +340,30 @@ DEFAULT_MAX_PAGES = 100
 DEFAULT_MAX_EMPTY_PAGES = 2
 
 
+
+
+
+
+
+
 # Общая группа.
 RUTUBE_GROUP = "Рутуб кабельная"
 
 
+
+
+
+
+
+
 # EPG.
 M3U_EPG_URL = "https://iptvx.one/EPG"
+
+
+
+
+
+
 
 
 # User-Agent из рабочего M3U пользователя.
@@ -261,8 +374,16 @@ M3U_USER_AGENT = (
 )
 
 
+
+
+
+
+
+
 # Output.
 OUTPUT_DIR = "rutube_output"
+
+
 
 
 M3U_FILENAME = "rutube_tv.m3u"
@@ -271,7 +392,50 @@ JSONL_FILENAME = "rutube_tv.jsonl"
 TXT_FILENAME = "rutube_tv.txt"
 
 
+
+
 DISCOVERY_HTML_FILENAME = "rutube_tv_discovery_debug.html"
+
+# ============================================================
+# CUMULATIVE TV DISCOVERY
+# ============================================================
+# Сколько уникальных телеканалов реально собираем за один цикл.
+TV_TARGET_COUNT = 400
+
+# Авторитетный маркер карточки ТВ в артефактах Workflow.
+TV_ARTIFACT_MARKER_RE = re.compile(
+    r"\*\s*телеканалы\s*\*",
+    re.IGNORECASE,
+)
+
+# Ограничители дополнительного поиска через YouTube.
+YOUTUBE_DISCOVERY_MAX_CANDIDATES = 600
+# Ограниченный старый обход каталога: используем как дополнительный
+# источник накопленных карточек, но никогда не крутим его бесконечно.
+LEGACY_TRAVERSAL_MAX_PAGES = 200
+LEGACY_TRAVERSAL_MAX_EMPTY_PAGES = 3
+
+# Сколько предыдущих логов/телеметрических файлов читаем.
+PREVIOUS_TELEMETRY_MAX_FILES = 50
+
+YOUTUBE_DISCOVERY_QUERIES = (
+    "телеканалы России прямой эфир",
+    "российские телеканалы live",
+    "телеканалы Москва прямой эфир",
+    "региональные телеканалы России live",
+    "новости телеканал прямой эфир Россия",
+    "спортивные телеканалы России live",
+    "детские телеканалы России live",
+    "музыкальные телеканалы России live",
+)
+
+
+
+
+
+
+
+
 
 
 # ============================================================
@@ -279,13 +443,23 @@ DISCOVERY_HTML_FILENAME = "rutube_tv_discovery_debug.html"
 # ============================================================
 
 
+
+
 class RutubeScrapperError(Exception):
     """Base exception for Rutube scraper."""
+
+
+
+
+
+
 
 
 # ============================================================
 # DATA MODELS
 # ============================================================
+
+
 
 
 @dataclass
@@ -295,31 +469,49 @@ class StreamInfo:
     height: Optional[int] = None
 
 
+
+
     bandwidth: Optional[int] = None
     bandwidth_kbps: Optional[float] = None
 
 
+
+
     average_bandwidth: Optional[int] = None
+
+
 
 
     codecs: Optional[str] = None
     mime_type: Optional[str] = None
 
 
+
+
     frame_rate: Optional[float] = None
+
+
 
 
     audio: Optional[str] = None
     video: Optional[str] = None
 
 
+
+
     url: str = ""
+
+
 
 
     protocol: str = "HLS"
 
 
+
+
     url_hash: str = ""
+
+
 
 
     alive: Optional[bool] = None
@@ -329,13 +521,25 @@ class StreamInfo:
     response_time_ms: Optional[float] = None
 
 
+
+
     quality_score: float = 0.0
+
+
 
 
     source_index: int = 0
 
 
+
+
     raw_attributes: Dict[str, Any] = field(default_factory=dict)
+
+
+
+
+
+
 
 
 @dataclass
@@ -344,25 +548,43 @@ class VideoInfo:
     internal_id: str = ""
 
 
+
+
     title: Optional[str] = None
     description: Optional[str] = None
 
 
+
+
     duration: Optional[float] = None
+
+
 
 
     author: Optional[str] = None
     author_id: Optional[str] = None
 
 
+
+
     category: Optional[str] = None
+
+
 
 
     created_at: Optional[str] = None
     published_at: Optional[str] = None
 
 
+
+
     raw: Dict[str, Any] = field(default_factory=dict)
+
+
+
+
+
+
 
 
 @dataclass
@@ -372,19 +594,516 @@ class RequestStat:
     url: str
 
 
+
+
     status: Optional[int] = None
+
+
 
 
     ok: bool = False
 
 
+
+
     duration_ms: Optional[float] = None
+
+
 
 
     response_size: Optional[int] = None
 
 
+
+
     error: Optional[str] = None
+
+
+
+
+
+
+
+
+# ============================================================
+# TV ARTIFACT / DISCOVERY HELPERS
+# ============================================================
+
+
+def _contains_tv_artifact_marker(value: Any) -> bool:
+    """True только для контекста, содержащего *Телеканалы*."""
+    if isinstance(value, str):
+        return bool(TV_ARTIFACT_MARKER_RE.search(value))
+    if isinstance(value, dict):
+        return any(
+            _contains_tv_artifact_marker(k)
+            or _contains_tv_artifact_marker(v)
+            for k, v in value.items()
+        )
+    if isinstance(value, (list, tuple)):
+        return any(_contains_tv_artifact_marker(v) for v in value)
+    return False
+
+
+def _walk_artifact_objects(value: Any, marked: bool = False):
+    """Yield nested dicts and carry the *Телеканалы* marker down to children."""
+    if isinstance(value, dict):
+        current_marked = marked or _contains_tv_artifact_marker(value)
+        yield value, current_marked
+        for child in value.values():
+            yield from _walk_artifact_objects(child, current_marked)
+    elif isinstance(value, list):
+        for child in value:
+            yield from _walk_artifact_objects(child, marked)
+
+
+def _first_string(obj: Dict[str, Any], keys: Tuple[str, ...]) -> str:
+    for key in keys:
+        value = obj.get(key)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    return ""
+
+
+def _extract_video_id_from_text(value: str) -> str:
+    if not value:
+        return ""
+    match = re.search(
+        r"/live/video/(?P<id>[A-Za-z0-9_-]{10,})/?",
+        value,
+        re.IGNORECASE,
+    )
+    return match.group("id") if match else ""
+
+
+def _normalize_tv_identity(title: str, video_id: str = "") -> str:
+    if video_id:
+        return "id:" + video_id.strip().lower()
+    text = html.unescape(title or "").lower()
+    text = re.sub(r"\*\s*телеканалы\s*\*", " ", text)
+    text = re.sub(r"\b(прямой эфир|live|телеканал|телеканалы)\b", " ", text)
+    text = re.sub(r"[^\w\dа-яё]+", " ", text, flags=re.IGNORECASE)
+    return "name:" + re.sub(r"\s+", " ", text).strip()
+
+
+def _artifact_roots(output_dir: Path) -> List[Path]:
+    roots: List[Path] = []
+    candidates = [
+        os.getenv("WORKFLOW_ARTIFACTS_DIR"),
+        os.getenv("RUTUBE_ARTIFACTS_DIR"),
+        os.getenv("GITHUB_WORKSPACE"),
+        str(output_dir),
+        "workflow_artifacts",
+        "artifacts",
+        "previous_artifacts",
+    ]
+    for raw in candidates:
+        if not raw:
+            continue
+        path = Path(raw).expanduser()
+        if path.exists() and path.is_dir() and path not in roots:
+            roots.append(path)
+    return roots
+
+
+def _download_previous_workflow_artifacts(output_dir: Path, max_runs: int = 5) -> Optional[Path]:
+    """Скачивает артефакты нескольких предыдущих GitHub Actions runs, если доступны."""
+    repo = os.getenv("GITHUB_REPOSITORY", "").strip()
+    token = os.getenv("GITHUB_TOKEN", "").strip()
+    current_run = os.getenv("GITHUB_RUN_ID", "").strip()
+    if not repo or not token:
+        return None
+
+    root = output_dir / "_previous_workflow_artifacts"
+    root.mkdir(parents=True, exist_ok=True)
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Accept": "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28",
+        "User-Agent": M3U_USER_AGENT,
+    }
+
+    try:
+        runs_url = (
+            f"https://api.github.com/repos/{repo}/actions/runs"
+            "?per_page=20"
+        )
+        response = requests.get(runs_url, headers=headers, timeout=20)
+        response.raise_for_status()
+        runs = response.json().get("workflow_runs", [])
+    except Exception as exc:
+        logging.warning("Workflow artifacts: cannot list previous runs: %s", exc)
+        return None
+
+    downloaded = 0
+    for run in runs:
+        run_id = str(run.get("id") or "")
+        if not run_id or run_id == current_run:
+            continue
+        if run.get("status") != "completed":
+            continue
+        if run.get("conclusion") not in {"success", "neutral", "skipped"}:
+            continue
+        if downloaded >= max_runs:
+            break
+
+        try:
+            artifacts_url = (
+                f"https://api.github.com/repos/{repo}/actions/runs/{run_id}/artifacts"
+                "?per_page=100"
+            )
+            ar = requests.get(artifacts_url, headers=headers, timeout=20)
+            ar.raise_for_status()
+            artifacts = ar.json().get("artifacts", [])
+        except Exception as exc:
+            logging.debug("Workflow artifacts: run %s list failed: %s", run_id, exc)
+            continue
+
+        for artifact in artifacts:
+            name = str(artifact.get("name") or "")
+            artifact_id = artifact.get("id")
+            if not artifact_id:
+                continue
+            # Берём только артефакты, потенциально содержащие TV discovery.
+            lname = name.lower()
+            if not any(token in lname for token in ("rutube", "tv", "discovery", "channel", "artifact")):
+                continue
+            target = root / f"run_{run_id}" / re.sub(r"[^A-Za-z0-9_.-]+", "_", name)
+            marker = target / ".downloaded"
+            if marker.exists():
+                downloaded += 1
+                continue
+            target.mkdir(parents=True, exist_ok=True)
+            zip_path = target / "artifact.zip"
+            try:
+                download_url = (
+                    f"https://api.github.com/repos/{repo}/actions/artifacts/{artifact_id}/zip"
+                )
+                rr = requests.get(download_url, headers=headers, timeout=60)
+                rr.raise_for_status()
+                zip_path.write_bytes(rr.content)
+                with zipfile.ZipFile(zip_path) as zf:
+                    zf.extractall(target)
+                try:
+                    zip_path.unlink()
+                except OSError:
+                    pass
+                marker.write_text("ok", encoding="utf-8")
+                downloaded += 1
+                logging.info("Workflow artifact loaded: run=%s artifact=%s", run_id, name)
+            except Exception as exc:
+                logging.warning("Workflow artifact download failed: %s | %s", name, exc)
+                try:
+                    zip_path.unlink()
+                except OSError:
+                    pass
+
+    return root if downloaded else None
+
+
+def load_previous_tv_cards(output_dir: Path) -> List[Dict[str, Any]]:
+    """Загружает карточки только из артефактов, где явно присутствует *Телеканалы*."""
+    cards: List[Dict[str, Any]] = []
+    seen_files = set()
+
+    # В GitHub Actions пытаемся сами подтянуть предыдущие runs.
+    # Если токена/API нет — используем уже смонтированные артефакты.
+    _download_previous_workflow_artifacts(output_dir)
+
+    for root in _artifact_roots(output_dir):
+        try:
+            files = root.rglob("*")
+        except Exception:
+            continue
+        for path in files:
+            if not path.is_file() or path in seen_files:
+                continue
+            if path.suffix.lower() not in {".json", ".jsonl", ".txt"}:
+                continue
+            seen_files.add(path)
+
+            try:
+                text = path.read_text(encoding="utf-8", errors="ignore")
+            except Exception:
+                continue
+            if not TV_ARTIFACT_MARKER_RE.search(text):
+                continue
+
+            objects: List[Any] = []
+            if path.suffix.lower() == ".json":
+                try:
+                    objects.append(json.loads(text))
+                except Exception:
+                    continue
+            elif path.suffix.lower() == ".jsonl":
+                for line in text.splitlines():
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        objects.append(json.loads(line))
+                    except Exception:
+                        continue
+            else:
+                # TXT/лог: сначала пробуем JSON-фрагменты построчно,
+                # затем вытаскиваем пары title + Rutube live URL.
+                for line in text.splitlines():
+                    if TV_ARTIFACT_MARKER_RE.search(line):
+                        objects.append({"artifact_line": line})
+
+            for root_obj in objects:
+                for obj, marked in _walk_artifact_objects(root_obj):
+                    if not isinstance(obj, dict) or not marked:
+                        continue
+
+                    video_id = _first_string(
+                        obj,
+                        ("video_id", "videoId", "id", "rutube_video_id", "internal_id"),
+                    )
+                    if not video_id:
+                        for key in ("url", "catalog_url", "video_url", "href", "link"):
+                            video_id = _extract_video_id_from_text(
+                                str(obj.get(key) or "")
+                            )
+                            if video_id:
+                                break
+
+                    title = _first_string(
+                        obj,
+                        ("title", "name", "channel_name", "video_title", "display_name"),
+                    )
+                    if not title:
+                        line = _first_string(obj, ("artifact_line",))
+                        title = line
+
+                    if not video_id and not title:
+                        continue
+                    if not video_id:
+                        # Без video_id карточка пригодна как seed, но не будет
+                        # отправлена в HLS-этап до разрешения через Rutube search.
+                        card_type = "tv_seed"
+                    else:
+                        card_type = "live"
+
+                    cards.append({
+                        "video_id": video_id,
+                        "title": title or (f"Rutube {video_id}" if video_id else ""),
+                        "category": "*Телеканалы*",
+                        "artifact_marker": "*Телеканалы*",
+                        "card_type": card_type,
+                        "artifact_file": str(path),
+                        "source_url": str(obj.get("source_url") or obj.get("url") or ""),
+                        "catalog_url": (
+                            str(obj.get("catalog_url"))
+                            if obj.get("catalog_url") else
+                            (f"https://rutube.ru/live/video/{video_id}/" if video_id else "")
+                        ),
+                        "logo": _first_string(obj, ("logo", "tvg_logo", "thumbnail")),
+                        "discovered_at": datetime.now(timezone.utc).isoformat(),
+                    })
+
+    logging.info("TV ARTIFACTS: loaded raw TV cards=%d", len(cards))
+    return cards
+
+
+def _unique_tv_cards(cards: List[Dict[str, Any]], limit: int = TV_TARGET_COUNT) -> List[Dict[str, Any]]:
+    """
+    Формирует целевой набор уникальных реальных телеканалов.
+
+    Главный ключ уникальности — нормализованное название канала,
+    потому что один и тот же телеканал может получить новый Rutube
+    video_id. Если нормального названия нет, используется video_id.
+    """
+    result: List[Dict[str, Any]] = []
+    seen_names = set()
+    seen_ids = set()
+
+    for card in cards:
+        title = str(
+            card.get("title")
+            or card.get("name")
+            or card.get("channel_name")
+            or ""
+        ).strip()
+        video_id = str(card.get("video_id") or "").strip()
+
+        # Не допускаем технические ID в финальный набор.
+        if video_id and any(
+            token in video_id.lower()
+            for token in TECHNICAL_VIDEO_ID_TOKENS
+        ):
+            continue
+
+        # Реальное имя предпочтительнее video_id: новый video_id
+        # того же канала не должен создавать второй канал.
+        name_key = ""
+        if title and not title.lower().startswith("rutube "):
+            name_key = _normalize_tv_identity(title)
+            if name_key == "name:":
+                name_key = ""
+
+        id_key = video_id.lower() if video_id else ""
+
+        if name_key and name_key in seen_names:
+            continue
+        if not name_key and id_key and id_key in seen_ids:
+            continue
+        if not name_key and not id_key:
+            continue
+
+        if name_key:
+            seen_names.add(name_key)
+        if id_key:
+            seen_ids.add(id_key)
+
+        result.append(card)
+        if len(result) >= limit:
+            break
+
+    return result
+
+
+def save_cumulative_tv_cards(output_dir: Path, cards: List[Dict[str, Any]]) -> None:
+    output_dir.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "schema": {"name": "RutubeTVCumulativeCards", "version": 1},
+        "marker": "*Телеканалы*",
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "count": len(cards),
+        "channels": cards,
+    }
+    write_json(output_dir / "rutube_tv_cumulative_cards.json", payload)
+
+
+# ============================================================
+# PREVIOUS TRAVERSAL + TELEMETRY
+# ============================================================
+
+def _previous_data_roots(output_dir: Path) -> List[Path]:
+    roots = _artifact_roots(output_dir)
+    for extra in (output_dir / "_previous_workflow_artifacts",):
+        if extra.exists() and extra.is_dir() and extra not in roots:
+            roots.append(extra)
+    return roots
+
+
+def load_previous_traversal_and_telemetry(output_dir: Path) -> Dict[str, Any]:
+    """Поднимает старые результаты обхода и телеметрию из JSON/JSONL/TXT/LOG.
+
+    Это именно восстановление накопленной информации, а не новый обход.
+    Карточки из старого обхода используются как discovery-кандидаты; запросы,
+    статусы, задержки и размеры ответов сохраняются как historical telemetry.
+    """
+    cards: List[Dict[str, Any]] = []
+    telemetry: List[Dict[str, Any]] = []
+    files_seen = 0
+    telemetry_files = 0
+
+    roots = _previous_data_roots(output_dir)
+    candidates: List[Path] = []
+    for root in roots:
+        try:
+            for path in root.rglob("*"):
+                if path.is_file() and path.suffix.lower() in {".json", ".jsonl", ".txt", ".log"}:
+                    candidates.append(path)
+        except Exception:
+            continue
+
+    # Новейшие файлы сначала, но без бесконтрольного чтения всей файловой системы.
+    candidates = sorted(set(candidates), key=lambda x: x.stat().st_mtime if x.exists() else 0, reverse=True)
+
+    for path in candidates:
+        if files_seen >= PREVIOUS_TELEMETRY_MAX_FILES and telemetry_files >= PREVIOUS_TELEMETRY_MAX_FILES:
+            break
+        try:
+            text = path.read_text(encoding="utf-8", errors="ignore")
+        except Exception:
+            continue
+        files_seen += 1
+        lname = path.name.lower()
+        is_telemetry_file = path.suffix.lower() in {".log"} or any(
+            x in lname for x in ("telemetry", "stats", "stat", "report", "discovery")
+        )
+
+        # JSON/JSONL: извлекаем реальные записи карточек, если они явно похожи
+        # на результат старого обхода. Маркер *Телеканалы* сохраняем при наличии.
+        objects: List[Any] = []
+        if path.suffix.lower() == ".json":
+            try:
+                objects.append(json.loads(text))
+            except Exception:
+                pass
+        elif path.suffix.lower() == ".jsonl":
+            for line in text.splitlines():
+                if not line.strip():
+                    continue
+                try:
+                    objects.append(json.loads(line))
+                except Exception:
+                    continue
+
+        for root_obj in objects:
+            for obj, marked in _walk_artifact_objects(root_obj):
+                if not isinstance(obj, dict):
+                    continue
+                vid = _first_string(obj, ("video_id", "videoId", "rutube_video_id", "internal_id"))
+                if not vid:
+                    for key in ("catalog_url", "video_url", "url", "href", "link"):
+                        vid = _extract_video_id_from_text(str(obj.get(key) or ""))
+                        if vid:
+                            break
+                title = _first_string(obj, ("title", "name", "channel_name", "video_title", "display_name"))
+                category = _first_string(obj, ("category", "shelf", "section", "tab"))
+                # Старый обход мог не писать marker; файл с discovery/catalog
+                # результатом всё равно считаем историческим traversal source.
+                traversal_like = marked or any(k in obj for k in ("source_url", "catalog_url", "card_type", "video_id"))
+                if vid and title and traversal_like:
+                    cards.append({
+                        "video_id": vid,
+                        "title": title,
+                        "category": category or "Исторический обход",
+                        "artifact_marker": "*Телеканалы*" if marked else "",
+                        "card_type": obj.get("card_type") or "live",
+                        "source_url": str(obj.get("source_url") or ""),
+                        "catalog_url": str(obj.get("catalog_url") or f"https://rutube.ru/live/video/{vid}/"),
+                        "logo": _first_string(obj, ("logo", "tvg_logo", "thumbnail")),
+                        "discovered_from": "previous_traversal",
+                        "historical": True,
+                    })
+
+        if is_telemetry_file:
+            telemetry_files += 1
+            # Сохраняем полезные строки телеметрии как исторические события.
+            for line in text.splitlines():
+                if not re.search(r"(?:request|http|status|stream|card|page|category|discovery|hls|error|duration|ms=|bytes)", line, re.I):
+                    continue
+                telemetry.append({"file": str(path), "line": line[:2000], "historical": True})
+                if len(telemetry) >= 5000:
+                    break
+
+    # Логи также могут содержать карточки вида [N/M] category | title | id.
+    log_card_re = re.compile(r"\[(?:\d+)\/(?:\d+)\]\s*(.*?)\s*\|\s*(.*?)\s*\|\s*([A-Za-z0-9_-]{10,})")
+    for event in telemetry:
+        m = log_card_re.search(event["line"])
+        if not m:
+            continue
+        cards.append({
+            "video_id": m.group(3),
+            "title": m.group(2).strip(),
+            "category": m.group(1).strip() or "Исторический обход",
+            "artifact_marker": "",
+            "card_type": "live",
+            "catalog_url": f"https://rutube.ru/live/video/{m.group(3)}/",
+            "source_url": "",
+            "discovered_from": "previous_log_telemetry",
+            "historical": True,
+        })
+
+    logging.info(
+        "PREVIOUS HISTORY: traversal cards=%d telemetry events=%d files=%d",
+        len(cards), len(telemetry), files_seen,
+    )
+    return {"cards": cards, "telemetry": telemetry, "files": files_seen}
 
 
 # ============================================================
@@ -392,7 +1111,11 @@ class RequestStat:
 # ============================================================
 
 
+
+
 class RutubeScrapper:
+
+
 
 
     def __init__(
@@ -407,21 +1130,31 @@ class RutubeScrapper:
                 "https://pass.rutube.ru/api/accounts/phone/login/",
 
 
+
+
             "login_social_api":
                 "https://rutube.ru/social/auth/rupass/"
                 "?callback_path=/social/login/rupass/",
+
+
 
 
             "video_api":
                 "https://rutube.ru/api/video",
 
 
+
+
             "visitor_api":
                 "https://rutube.ru/api/accounts/visitor/",
 
 
+
+
             "ad_api":
                 "https://mtr.rutube.ru/api/v3/interactive",
+
+
 
 
             "hls_api":
@@ -429,11 +1162,17 @@ class RutubeScrapper:
         }
 
 
+
+
         self.timeout = timeout
         self.verify_ssl = verify_ssl
 
 
+
+
         self.session = requests.Session()
+
+
 
 
         self.session.headers.update({
@@ -447,19 +1186,30 @@ class RutubeScrapper:
         })
 
 
+
+
         self.request_stats: List[RequestStat] = []
+        self.previous_telemetry: List[Dict[str, Any]] = []
+
+
 
 
         self.started_at = None
         self.finished_at = None
 
 
+
+
         self._configure_retry(retries)
+
+
 
 
     # ========================================================
     # HTTP
     # ========================================================
+
+
 
 
     def _configure_retry(
@@ -468,8 +1218,12 @@ class RutubeScrapper:
     ):
 
 
+
+
         if Retry is None:
             return
+
+
 
 
         retry = Retry(
@@ -494,11 +1248,15 @@ class RutubeScrapper:
         )
 
 
+
+
         adapter = HTTPAdapter(
             max_retries=retry,
             pool_connections=32,
             pool_maxsize=32,
         )
+
+
 
 
         self.session.mount(
@@ -507,10 +1265,14 @@ class RutubeScrapper:
         )
 
 
+
+
         self.session.mount(
             "http://",
             adapter,
         )
+
+
 
 
     def _request(
@@ -522,7 +1284,11 @@ class RutubeScrapper:
     ) -> requests.Response:
 
 
+
+
         started = time.perf_counter()
+
+
 
 
         stat = RequestStat(
@@ -532,7 +1298,11 @@ class RutubeScrapper:
         )
 
 
+
+
         try:
+
+
 
 
             response = self.session.request(
@@ -544,10 +1314,14 @@ class RutubeScrapper:
             )
 
 
+
+
             elapsed = (
                 time.perf_counter()
                 - started
             ) * 1000
+
+
 
 
             stat.status = response.status_code
@@ -558,6 +1332,8 @@ class RutubeScrapper:
             )
 
 
+
+
             try:
                 stat.response_size = len(
                     response.content
@@ -566,18 +1342,28 @@ class RutubeScrapper:
                 pass
 
 
+
+
             self.request_stats.append(
                 stat
             )
 
 
+
+
             response.raise_for_status()
+
+
 
 
             return response
 
 
+
+
         except Exception as exc:
+
+
 
 
             elapsed = (
@@ -586,13 +1372,19 @@ class RutubeScrapper:
             ) * 1000
 
 
+
+
             stat.duration_ms = round(
                 elapsed,
                 3,
             )
 
 
+
+
             stat.error = str(exc)
+
+
 
 
             self.request_stats.append(
@@ -600,14 +1392,20 @@ class RutubeScrapper:
             )
 
 
+
+
             raise RutubeScrapperError(
                 f"{name}: {exc}"
             ) from exc
 
 
+
+
     # ========================================================
     # SECURITY
     # ========================================================
+
+
 
 
     @staticmethod
@@ -616,10 +1414,16 @@ class RutubeScrapper:
     ) -> str:
 
 
+
+
         try:
 
 
+
+
             parsed = urlparse(url)
+
+
 
 
             sensitive = {
@@ -632,25 +1436,39 @@ class RutubeScrapper:
             }
 
 
+
+
             query = parse_qs(
                 parsed.query,
                 keep_blank_values=True,
             )
 
 
+
+
             for key in list(query):
 
 
+
+
                 if key.lower() in sensitive:
+
+
+
+
                     query[key] = [
                         "<REDACTED>"
                     ]
+
+
 
 
             safe_query = urlencode(
                 query,
                 doseq=True,
             )
+
+
 
 
             return urlunparse((
@@ -663,15 +1481,23 @@ class RutubeScrapper:
             ))
 
 
+
+
         except Exception:
+
+
 
 
             return "<URL>"
 
 
-    # ============================================================
+
+
+    # ========================================================
     # LOGIN
-    # ============================================================
+    # ========================================================
+
+
 
 
     def login(
@@ -681,6 +1507,8 @@ class RutubeScrapper:
     ) -> Dict[str, Any]:
 
 
+
+
         if (
             not phone.strip()
             or not password.strip()
@@ -688,6 +1516,8 @@ class RutubeScrapper:
             raise RutubeScrapperError(
                 "You must enter Rutube LiST credentials"
             )
+
+
 
 
         response = self._request(
@@ -701,10 +1531,14 @@ class RutubeScrapper:
         )
 
 
+
+
         result = self._json(
             response,
             "login",
         )
+
+
 
 
         if result.get(
@@ -712,9 +1546,13 @@ class RutubeScrapper:
         ) is not True:
 
 
+
+
             raise RutubeScrapperError(
                 "Invalid credentials"
             )
+
+
 
 
         self._request(
@@ -724,12 +1562,18 @@ class RutubeScrapper:
         )
 
 
+
+
         return result
+
+
 
 
     # ========================================================
     # VIDEO
     # ========================================================
+
+
 
 
     def video(
@@ -738,10 +1582,14 @@ class RutubeScrapper:
     ) -> VideoInfo:
 
 
+
+
         url = (
             f"{self.endpoints['video_api']}/"
             f"{video_id}"
         )
+
+
 
 
         response = self._request(
@@ -751,21 +1599,31 @@ class RutubeScrapper:
         )
 
 
+
+
         data = self._json(
             response,
             "video",
         )
 
 
+
+
         internal_id = data.get("id")
+
+
 
 
         if internal_id is None:
 
 
+
+
             raise RutubeScrapperError(
                 "Internal video id was not found"
             )
+
+
 
 
         return VideoInfo(
@@ -797,14 +1655,20 @@ class RutubeScrapper:
         )
 
 
+
+
     # ========================================================
     # VISITOR
     # ========================================================
 
 
+
+
     def visitor(
         self,
     ) -> Dict[str, Any]:
+
+
 
 
         response = self._request(
@@ -814,15 +1678,21 @@ class RutubeScrapper:
         )
 
 
+
+
         return self._json(
             response,
             "visitor",
         )
 
 
+
+
     # ========================================================
     # AWARD
     # ========================================================
+
+
 
 
     def award(
@@ -831,7 +1701,11 @@ class RutubeScrapper:
     ) -> Dict[str, Any]:
 
 
+
+
         visitor_data = self.visitor()
+
+
 
 
         club_params = visitor_data.get(
@@ -839,7 +1713,11 @@ class RutubeScrapper:
         )
 
 
+
+
         if not club_params:
+
+
 
 
             raise RutubeScrapperError(
@@ -847,10 +1725,14 @@ class RutubeScrapper:
             )
 
 
+
+
         params = {
             "video_id":
                 internal_video_id,
         }
+
+
 
 
         ad_url = (
@@ -862,11 +1744,15 @@ class RutubeScrapper:
         )
 
 
+
+
         response = self._request(
             "GET",
             ad_url,
             "award",
         )
+
+
 
 
         data = self._json(
@@ -875,12 +1761,18 @@ class RutubeScrapper:
         )
 
 
+
+
         award_value = data.get(
             "award"
         )
 
 
+
+
         if not award_value:
+
+
 
 
             raise RutubeScrapperError(
@@ -888,9 +1780,13 @@ class RutubeScrapper:
             )
 
 
+
+
         return {
             "award":
                 award_value,
+
+
 
 
             "visitor":
@@ -900,9 +1796,13 @@ class RutubeScrapper:
         }
 
 
+
+
     # ========================================================
     # HLS BALANCER
     # ========================================================
+
+
 
 
     def get_balancer(
@@ -912,11 +1812,15 @@ class RutubeScrapper:
     ) -> Dict[str, Any]:
 
 
+
+
         url = (
             f"{self.endpoints['hls_api']}/"
             f"{internal_video_id}"
             f"?club_token={award}"
         )
+
+
 
 
         response = self._request(
@@ -926,15 +1830,21 @@ class RutubeScrapper:
         )
 
 
+
+
         data = self._json(
             response,
             "hls_options",
         )
 
 
+
+
         video_balancer = data.get(
             "video_balancer"
         )
+
+
 
 
         if not isinstance(
@@ -943,9 +1853,13 @@ class RutubeScrapper:
         ):
 
 
+
+
             raise RutubeScrapperError(
                 "video_balancer was not found"
             )
+
+
 
 
         m3u8_url = (
@@ -954,7 +1868,11 @@ class RutubeScrapper:
         )
 
 
+
+
         if not m3u8_url:
+
+
 
 
             raise RutubeScrapperError(
@@ -962,13 +1880,19 @@ class RutubeScrapper:
             )
 
 
+
+
         return {
             "raw":
                 data,
 
 
+
+
             "video_balancer":
                 video_balancer,
+
+
 
 
             "m3u8_url":
@@ -976,9 +1900,13 @@ class RutubeScrapper:
         }
 
 
+
+
     # ========================================================
     # LIVE OPTIONS
     # ========================================================
+
+
 
 
     def get_live_options(
@@ -987,17 +1915,25 @@ class RutubeScrapper:
     ) -> Dict[str, Any]:
 
 
+
+
         """
         Получение JSON options для live-видео.
+
+
 
 
         В отличие от старого VOD flow здесь используем
         публичный play/options endpoint с format=json.
 
 
+
+
         no_404=true позволяет получить JSON-ответ вместо
         простого 404 в некоторых случаях.
         """
+
+
 
 
         url = (
@@ -1008,11 +1944,15 @@ class RutubeScrapper:
         )
 
 
+
+
         response = self._request(
             "GET",
             url,
             f"live_options_{video_id}",
         )
+
+
 
 
         return self._json(
@@ -1021,87 +1961,182 @@ class RutubeScrapper:
         )
 
 
+
+
     def get_live_streams(
         self,
         video_id: str,
     ) -> List[str]:
-
-
-        data = self.get_live_options(
-            video_id
-        )
-
-
+        """Возвращает ВСЕ livestream HLS URL из полного play/options ответа."""
+        data = self.get_live_options(video_id)
         result: List[str] = []
+        self._collect_balancer_hls_urls(data, result)
+        logging.info("RUTUBE BALANCER: video_id=%s streams=%d", video_id, len(result))
+        return result
 
+    @staticmethod
+    def _is_rutube_balancer_hls(url: str) -> bool:
+        value = str(url or "").strip()
+        base = value.split("?", 1)[0].lower()
+        return base.startswith("https://bl.rutube.ru/livestream/") and base.endswith(".m3u8")
 
-        live_streams = data.get(
-            "live_streams",
-            {},
-        )
+    @classmethod
+    def _collect_balancer_hls_urls(cls, value: Any, result: List[str]) -> None:
+        if isinstance(value, str):
+            url = value.strip()
+            if cls._is_rutube_balancer_hls(url):
+                result.append(url)
+            return
+        if isinstance(value, dict):
+            for child in value.values():
+                cls._collect_balancer_hls_urls(child, result)
+            return
+        if isinstance(value, (list, tuple)):
+            for child in value:
+                cls._collect_balancer_hls_urls(child, result)
 
+    # ========================================================
+    # FULL BL.RUTUBE.RU POLL
+    # ========================================================
 
-        if not isinstance(
-            live_streams,
-            dict,
-        ):
-            return result
+    def poll_bl_rutube_stream(
+        self,
+        url: str,
+    ) -> Dict[str, Any]:
+        """
+        Полностью опрашивает конкретный подписанный balancer URL.
 
+        Здесь намеренно НЕ изменяется URL: query string (s=, e=,
+        scheme=https и любые другие параметры) сохраняется как есть.
+        Опрос означает реальный HTTP GET конкретного livestream URL,
+        чтение начала ответа и фиксацию всей доступной телеметрии.
+        """
+        started = time.perf_counter()
+        result: Dict[str, Any] = {
+            "url": url,
+            "host": urlparse(url).netloc,
+            "path": urlparse(url).path,
+            "alive": False,
+            "http_status": None,
+            "content_type": None,
+            "content_length": None,
+            "response_time_ms": None,
+            "body_bytes_sampled": 0,
+            "is_m3u8": False,
+            "error": None,
+        }
 
-        hls = live_streams.get(
-            "hls",
-            [],
-        )
-
-
-        if not isinstance(
-            hls,
-            list,
-        ):
-            return result
-
-
-        for item in hls:
-
-
-            if isinstance(
-                item,
-                str,
-            ):
-
-
-                if item.strip():
-                    result.append(
-                        item.strip()
-                    )
-
-
-                continue
-
-
-            if not isinstance(
-                item,
-                dict,
-            ):
-                continue
-
-
-            stream_url = (
-                item.get("url")
-                or item.get("src")
-                or item.get("stream")
+        try:
+            response = self.session.get(
+                url,
+                timeout=BL_RUTUBE_POLL_TIMEOUT,
+                verify=self.verify_ssl,
+                stream=True,
             )
 
+            result["http_status"] = response.status_code
+            result["content_type"] = response.headers.get("Content-Type")
+            result["content_length"] = self._to_int(
+                response.headers.get("Content-Length")
+            )
+            result["response_time_ms"] = round(
+                (time.perf_counter() - started) * 1000,
+                3,
+            )
 
-            if stream_url:
+            chunks: List[bytes] = []
+            sampled = 0
+            try:
+                for chunk in response.iter_content(chunk_size=65536):
+                    if not chunk:
+                        continue
+                    remaining = BL_RUTUBE_MAX_BODY_BYTES - sampled
+                    if remaining <= 0:
+                        break
+                    piece = chunk[:remaining]
+                    chunks.append(piece)
+                    sampled += len(piece)
+                    if sampled >= BL_RUTUBE_MAX_BODY_BYTES:
+                        break
+            finally:
+                response.close()
 
+            result["body_bytes_sampled"] = sampled
+            body = b"".join(chunks)
+            head = body[:8192].decode("utf-8", errors="replace")
+            result["is_m3u8"] = (
+                "#EXTM3U" in head
+                or "application/vnd.apple.mpegurl" in str(result["content_type"] or "").lower()
+                or "application/x-mpegurl" in str(result["content_type"] or "").lower()
+            )
+            result["alive"] = bool(response.ok and sampled >= 0)
 
-                result.append(
-                    str(stream_url)
-                )
-
+        except Exception as exc:
+            result["response_time_ms"] = round(
+                (time.perf_counter() - started) * 1000,
+                3,
+            )
+            result["error"] = str(exc)
 
         return result
+
+    def poll_all_bl_rutube_streams(
+        self,
+        urls: List[str],
+    ) -> List[Dict[str, Any]]:
+        """
+        Опросить КАЖДЫЙ найденный bl.rutube.ru/livestream/*.m3u8 URL.
+
+        Никакого first-only, slice, dedupe или ограничения количества
+        найденных URL здесь нет. Порядок результата совпадает с порядком
+        входного списка.
+        """
+        if not urls:
+            return []
+
+        from concurrent.futures import ThreadPoolExecutor
+
+        logging.info(
+            "BL.RUTUBE FULL POLL: start streams=%d workers=%d",
+            len(urls),
+            BL_RUTUBE_POLL_WORKERS,
+        )
+
+        results: List[Optional[Dict[str, Any]]] = [None] * len(urls)
+        workers = max(1, min(BL_RUTUBE_POLL_WORKERS, len(urls)))
+
+        with ThreadPoolExecutor(max_workers=workers) as executor:
+            futures = {
+                executor.submit(self.poll_bl_rutube_stream, url): index
+                for index, url in enumerate(urls)
+            }
+            for future, index in list(futures.items()):
+                try:
+                    results[index] = future.result()
+                except Exception as exc:
+                    results[index] = {
+                        "url": urls[index],
+                        "host": urlparse(urls[index]).netloc,
+                        "path": urlparse(urls[index]).path,
+                        "alive": False,
+                        "http_status": None,
+                        "content_type": None,
+                        "content_length": None,
+                        "response_time_ms": None,
+                        "body_bytes_sampled": 0,
+                        "is_m3u8": False,
+                        "error": str(exc),
+                    }
+
+        final = [item for item in results if item is not None]
+        alive = sum(1 for item in final if item.get("alive"))
+        logging.info(
+            "BL.RUTUBE FULL POLL: finished total=%d alive=%d dead=%d",
+            len(final),
+            alive,
+            len(final) - alive,
+        )
+        return final
 
 
     # ========================================================
@@ -1109,10 +2144,14 @@ class RutubeScrapper:
     # ========================================================
 
 
+
+
     def get_m3u8(
         self,
         url: str,
     ) -> str:
+
+
 
 
         response = self._request(
@@ -1122,7 +2161,11 @@ class RutubeScrapper:
         )
 
 
+
+
         return response.text.strip()
+
+
 
 
     # ========================================================
@@ -1130,10 +2173,14 @@ class RutubeScrapper:
     # ========================================================
 
 
+
+
     def parse_m3u8(
         self,
         text: str,
     ) -> List[StreamInfo]:
+
+
 
 
         lines = [
@@ -1143,12 +2190,18 @@ class RutubeScrapper:
         ]
 
 
+
+
         streams: List[StreamInfo] = []
+
+
 
 
         for index, line in enumerate(
             lines
         ):
+
+
 
 
             if not line.startswith(
@@ -1157,9 +2210,13 @@ class RutubeScrapper:
                 continue
 
 
+
+
             attributes_text = line[
                 len("#EXT-X-STREAM-INF:")
             ]
+
+
 
 
             attributes = (
@@ -1169,12 +2226,18 @@ class RutubeScrapper:
             )
 
 
+
+
             stream_url = None
+
+
 
 
             for next_line in lines[
                 index + 1:
             ]:
+
+
 
 
                 if next_line.startswith(
@@ -1183,12 +2246,18 @@ class RutubeScrapper:
                     continue
 
 
+
+
                 stream_url = next_line
                 break
 
 
+
+
             if not stream_url:
                 continue
+
+
 
 
             resolution = attributes.get(
@@ -1196,11 +2265,17 @@ class RutubeScrapper:
             )
 
 
+
+
             width = None
             height = None
 
 
+
+
             if resolution:
+
+
 
 
                 match = re.match(
@@ -1209,7 +2284,11 @@ class RutubeScrapper:
                 )
 
 
+
+
                 if match:
+
+
 
 
                     width = int(
@@ -1217,9 +2296,13 @@ class RutubeScrapper:
                     )
 
 
+
+
                     height = int(
                         match.group(2)
                     )
+
+
 
 
             bandwidth = self._to_int(
@@ -1227,6 +2310,8 @@ class RutubeScrapper:
                     "BANDWIDTH"
                 )
             )
+
+
 
 
             average_bandwidth = (
@@ -1238,11 +2323,15 @@ class RutubeScrapper:
             )
 
 
+
+
             frame_rate = self._to_float(
                 attributes.get(
                     "FRAME-RATE"
                 )
             )
+
+
 
 
             stream = StreamInfo(
@@ -1282,6 +2371,8 @@ class RutubeScrapper:
             )
 
 
+
+
             stream.quality_score = (
                 self.calculate_quality_score(
                     stream
@@ -1289,17 +2380,25 @@ class RutubeScrapper:
             )
 
 
+
+
             streams.append(
                 stream
             )
 
 
+
+
         return streams
+
+
 
 
     # ========================================================
     # M3U8 ATTRIBUTE PARSER
     # ========================================================
+
+
 
 
     @staticmethod
@@ -1308,7 +2407,11 @@ class RutubeScrapper:
     ) -> Dict[str, str]:
 
 
+
+
         result = {}
+
+
 
 
         pattern = re.compile(
@@ -1325,12 +2428,18 @@ class RutubeScrapper:
         )
 
 
+
+
         for match in pattern.finditer(
             text
         ):
 
 
+
+
             key = match.group(1)
+
+
 
 
             value = (
@@ -1341,17 +2450,25 @@ class RutubeScrapper:
             )
 
 
+
+
             result[key] = (
                 value.strip()
             )
 
 
+
+
         return result
+
+
 
 
     # ========================================================
     # STREAM TEST
     # ========================================================
+
+
 
 
     def test_stream(
@@ -1360,10 +2477,16 @@ class RutubeScrapper:
     ) -> StreamInfo:
 
 
+
+
         started = time.perf_counter()
 
 
+
+
         try:
+
+
 
 
             response = self.session.get(
@@ -1374,10 +2497,14 @@ class RutubeScrapper:
             )
 
 
+
+
             elapsed = (
                 time.perf_counter()
                 - started
             ) * 1000
+
+
 
 
             stream.response_time_ms = round(
@@ -1386,9 +2513,13 @@ class RutubeScrapper:
             )
 
 
+
+
             stream.http_status = (
                 response.status_code
             )
+
+
 
 
             stream.content_type = (
@@ -1398,6 +2529,8 @@ class RutubeScrapper:
             )
 
 
+
+
             content_length = (
                 response.headers.get(
                     "Content-Length"
@@ -1405,7 +2538,11 @@ class RutubeScrapper:
             )
 
 
+
+
             if content_length:
+
+
 
 
                 stream.response_size = (
@@ -1415,18 +2552,28 @@ class RutubeScrapper:
                 )
 
 
+
+
             stream.alive = (
                 response.ok
             )
 
 
+
+
             response.close()
+
+
 
 
         except Exception:
 
 
+
+
             stream.alive = False
+
+
 
 
             stream.response_time_ms = round(
@@ -1438,12 +2585,27 @@ class RutubeScrapper:
             )
 
 
+
+
+        stream.quality_score = (
+            self.calculate_quality_score(
+                stream
+            )
+        )
+
+
+
+
         return stream
 
 
+
+
     # ========================================================
-    # QUALITY
+    # QUALITY SCORE
     # ========================================================
+
+
 
 
     @staticmethod
@@ -1452,10 +2614,19 @@ class RutubeScrapper:
     ) -> float:
 
 
+
+
         score = 0.0
 
 
-        if stream.width and stream.height:
+
+
+        if (
+            stream.width
+            and stream.height
+        ):
+
+
 
 
             pixels = (
@@ -1464,48 +2635,3692 @@ class RutubeScrapper:
             )
 
 
+
+
             if pixels >= 3840 * 2160:
-                score += 100
-
-
-            elif pixels >= 1920 * 1080:
-                score += 80
-
-
-            elif pixels >= 1280 * 720:
                 score += 60
 
 
-            elif pixels >= 854 * 480:
+
+
+            elif pixels >= 2560 * 1440:
+                score += 50
+
+
+
+
+            elif pixels >= 1920 * 1080:
                 score += 40
 
 
-            elif pixels >= 640 * 360:
+
+
+            elif pixels >= 1280 * 720:
+                score += 30
+
+
+
+
+            elif pixels >= 854 * 480:
                 score += 20
+
+
+
+
+            else:
+                score += 10
+
+
 
 
         if stream.bandwidth:
 
 
+
+
             score += min(
-                stream.bandwidth / 1_000_000,
-                50,
+                25,
+                stream.bandwidth / 400_000,
             )
+
+
 
 
         if stream.frame_rate:
 
 
-            score += min(
-                stream.frame_rate,
-                30,
-            )
+
+
+            if stream.frame_rate >= 50:
+                score += 10
+
+
+
+
+            elif stream.frame_rate >= 25:
+                score += 7
+
+
+
+
+            elif stream.frame_rate >= 20:
+                score += 4
+
+
+
+
+        if stream.alive is True:
+            score += 15
+
+
+
+
+        elif stream.alive is False:
+            score -= 20
+
+
 
 
         return round(
-            score,
+            max(
+                0.0,
+                min(
+                    score,
+                    100.0
+                ),
+            ),
             3,
         )
+
+
+
+
+    # ========================================================
+    # LEGACY FULL SCRAPE
+    # ========================================================
+
+
+
+
+    def scrape(
+        self,
+        video_id: str,
+        phone: str,
+        password: str,
+        test_streams: bool = True,
+    ) -> Dict[str, Any]:
+
+
+
+
+        self.started_at = (
+            datetime.now(
+                timezone.utc
+            ).isoformat()
+        )
+
+
+
+
+        video = self.video_after_login(
+            video_id,
+            phone,
+            password,
+        )
+
+
+
+
+        award_data = self.award(
+            video.internal_id
+        )
+
+
+
+
+        award_value = (
+            award_data["award"]
+        )
+
+
+
+
+        balancer = self.get_balancer(
+            video.internal_id,
+            award_value,
+        )
+
+
+
+
+        m3u8_url = (
+            balancer["m3u8_url"]
+        )
+
+
+
+
+        m3u8_text = self.get_m3u8(
+            m3u8_url
+        )
+
+
+
+
+        streams = self.parse_m3u8(
+            m3u8_text
+        )
+
+
+
+
+        if test_streams:
+
+
+
+
+            for stream in streams:
+                self.test_stream(
+                    stream
+                )
+
+
+
+
+        self.finished_at = (
+            datetime.now(
+                timezone.utc
+            ).isoformat()
+        )
+
+
+
+
+        return self.build_report(
+            video=video,
+            award_data=award_data,
+            balancer=balancer,
+            m3u8_url=m3u8_url,
+            m3u8_text=m3u8_text,
+            streams=streams,
+        )
+
+
+
+
+    # ========================================================
+    # LOGIN + VIDEO
+    # ========================================================
+
+
+
+
+    def video_after_login(
+        self,
+        video_id: str,
+        phone: str,
+        password: str,
+    ) -> VideoInfo:
+
+
+
+
+        self.login(
+            phone,
+            password,
+        )
+
+
+
+
+        return self.video(
+            video_id
+        )
+
+
+
+
+    # ========================================================
+    # REPORT
+    # ========================================================
+
+
+
+
+    def build_report(
+        self,
+        video: VideoInfo,
+        award_data: Dict[str, Any],
+        balancer: Dict[str, Any],
+        m3u8_url: str,
+        m3u8_text: str,
+        streams: List[StreamInfo],
+    ) -> Dict[str, Any]:
+
+
+
+
+        return {
+            "schema": {
+                "name":
+                    "RutubeMLVideoReport",
+
+
+
+
+                "version":
+                    VERSION,
+            },
+
+
+
+
+            "meta": {
+                "generated_at":
+                    datetime.now(
+                        timezone.utc
+                    ).isoformat(),
+
+
+
+
+                "started_at":
+                    self.started_at,
+
+
+
+
+                "finished_at":
+                    self.finished_at,
+
+
+
+
+                "python_version":
+                    sys.version,
+
+
+
+
+                "platform":
+                    sys.platform,
+            },
+
+
+
+
+            "video":
+                asdict(video),
+
+
+
+
+            "stream_source": {
+                "balancer_url":
+                    self._safe_url(
+                        m3u8_url
+                    ),
+
+
+
+
+                "m3u8_sha256":
+                    hashlib.sha256(
+                        m3u8_text.encode(
+                            "utf-8",
+                            errors="replace",
+                        )
+                    ).hexdigest(),
+
+
+
+
+                "line_count":
+                    len(
+                        m3u8_text.splitlines()
+                    ),
+            },
+
+
+
+
+            "streams": [
+                asdict(stream)
+                for stream in streams
+            ],
+
+
+
+
+            "statistics":
+                self.make_statistics(
+                    streams
+                ),
+
+
+
+
+            "ml":
+                self.make_ml_dataset(
+                    video,
+                    streams,
+                ),
+
+
+
+
+            "historical_telemetry": {
+                "events_loaded": len(getattr(self, "previous_telemetry", [])),
+                "events": getattr(self, "previous_telemetry", []),
+            },
+
+            "http": {
+                "requests": [
+                    asdict(stat)
+                    for stat
+                    in self.request_stats
+                ]
+            },
+
+
+
+
+            "visitor":
+                award_data.get(
+                    "visitor",
+                    {},
+                ),
+
+
+
+
+            "balancer":
+                self._sanitize_balancer(
+                    balancer
+                ),
+        }
+
+
+
+
+    # ========================================================
+    # STATISTICS
+    # ========================================================
+
+
+
+
+    @staticmethod
+    def make_statistics(
+        streams: List[StreamInfo],
+    ) -> Dict[str, Any]:
+
+
+
+
+        alive = [
+            s for s in streams
+            if s.alive is True
+        ]
+
+
+
+
+        dead = [
+            s for s in streams
+            if s.alive is False
+        ]
+
+
+
+
+        resolutions = {}
+
+
+
+
+        for stream in streams:
+
+
+
+
+            key = (
+                stream.resolution
+                or "unknown"
+            )
+
+
+
+
+            resolutions[key] = (
+                resolutions.get(
+                    key,
+                    0,
+                ) + 1
+            )
+
+
+
+
+        best = None
+
+
+
+
+        if streams:
+
+
+
+
+            best = max(
+                streams,
+                key=lambda s:
+                    s.quality_score,
+            )
+
+
+
+
+        return {
+            "total_streams":
+                len(streams),
+
+
+
+
+            "alive_streams":
+                len(alive),
+
+
+
+
+            "dead_streams":
+                len(dead),
+
+
+
+
+            "availability_percent":
+                round(
+                    len(alive)
+                    / len(streams)
+                    * 100,
+                    2,
+                )
+                if streams
+                else 0,
+
+
+
+
+            "resolutions":
+                resolutions,
+
+
+
+
+            "best_stream":
+                asdict(best)
+                if best
+                else None,
+
+
+
+
+            "bandwidth_min":
+                min(
+                    (
+                        s.bandwidth
+                        for s in streams
+                        if s.bandwidth
+                    ),
+                    default=None,
+                ),
+
+
+
+
+            "bandwidth_max":
+                max(
+                    (
+                        s.bandwidth
+                        for s in streams
+                        if s.bandwidth
+                    ),
+                    default=None,
+                ),
+        }
+
+
+
+
+    # ========================================================
+    # ML DATASET
+    # ========================================================
+
+
+
+
+    @staticmethod
+    def make_ml_dataset(
+        video: VideoInfo,
+        streams: List[StreamInfo],
+    ) -> Dict[str, Any]:
+
+
+
+
+        records = []
+
+
+
+
+        for stream in streams:
+
+
+
+
+            features = {
+                "video_id":
+                    video.internal_id,
+
+
+
+
+                "stream_index":
+                    stream.source_index,
+
+
+
+
+                "width":
+                    stream.width or 0,
+
+
+
+
+                "height":
+                    stream.height or 0,
+
+
+
+
+                "pixels":
+                    (
+                        (stream.width or 0)
+                        * (stream.height or 0)
+                    ),
+
+
+
+
+                "bandwidth":
+                    stream.bandwidth or 0,
+
+
+
+
+                "bandwidth_kbps":
+                    stream.bandwidth_kbps or 0,
+
+
+
+
+                "average_bandwidth":
+                    stream.average_bandwidth
+                    or 0,
+
+
+
+
+                "frame_rate":
+                    stream.frame_rate or 0,
+
+
+
+
+                "alive":
+                    1
+                    if stream.alive is True
+                    else 0,
+
+
+
+
+                "http_status":
+                    stream.http_status or 0,
+
+
+
+
+                "response_time_ms":
+                    stream.response_time_ms
+                    or 0,
+
+
+
+
+                "quality_score":
+                    stream.quality_score,
+
+
+
+
+                "has_audio":
+                    1
+                    if stream.audio
+                    else 0,
+
+
+
+
+                "has_video":
+                    1
+                    if stream.video
+                    else 0,
+
+
+
+
+                "has_codecs":
+                    1
+                    if stream.codecs
+                    else 0,
+            }
+
+
+
+
+            records.append({
+                "features":
+                    features,
+
+
+
+
+                "target": {
+                    "alive":
+                        stream.alive,
+
+
+
+
+                    "quality_score":
+                        stream.quality_score,
+                },
+
+
+
+
+                "metadata": {
+                    "resolution":
+                        stream.resolution,
+
+
+
+
+                    "codecs":
+                        stream.codecs,
+
+
+
+
+                    "url_hash":
+                        stream.url_hash,
+                },
+            })
+
+
+
+
+        return {
+            "feature_schema": {
+                "width":
+                    "integer",
+
+
+
+
+                "height":
+                    "integer",
+
+
+
+
+                "pixels":
+                    "integer",
+
+
+
+
+                "bandwidth":
+                    "integer",
+
+
+
+
+                "bandwidth_kbps":
+                    "float",
+
+
+
+
+                "average_bandwidth":
+                    "integer",
+
+
+
+
+                "frame_rate":
+                    "float",
+
+
+
+
+                "alive":
+                    "binary",
+
+
+
+
+                "http_status":
+                    "integer",
+
+
+
+
+                "response_time_ms":
+                    "float",
+
+
+
+
+                "quality_score":
+                    "float",
+
+
+
+
+                "has_audio":
+                    "binary",
+
+
+
+
+                "has_video":
+                    "binary",
+
+
+
+
+                "has_codecs":
+                    "binary",
+            },
+
+
+
+
+            "records":
+                records,
+        }
+
+
+
+
+    # ========================================================
+    # LEGACY M3U PLAYLIST
+    # ========================================================
+
+
+
+
+    @staticmethod
+    def make_m3u(
+        video: VideoInfo,
+        streams: List[StreamInfo],
+        only_alive: bool = False,
+    ) -> str:
+
+
+
+
+        output = [
+            "#EXTM3U",
+
+
+
+
+            (
+                f'#PLAYLIST:"'
+                f'Rutube {video.internal_id}"'
+            ),
+        ]
+
+
+
+
+        ordered = sorted(
+            streams,
+            key=lambda s: (
+                s.height or 0,
+                s.bandwidth or 0,
+            ),
+            reverse=True,
+        )
+
+
+
+
+        for index, stream in enumerate(
+            ordered,
+            start=1,
+        ):
+
+
+
+
+            if (
+                only_alive
+                and stream.alive is not True
+            ):
+                continue
+
+
+
+
+            resolution = (
+                stream.resolution
+                or "unknown"
+            )
+
+
+
+
+            title = (
+                video.title
+                or f"Rutube {video.internal_id}"
+            )
+
+
+
+
+            if stream.bandwidth_kbps:
+
+
+
+
+                title = (
+                    f"{title} | "
+                    f"{resolution} | "
+                    f"{stream.bandwidth_kbps:.0f} kbps"
+                )
+
+
+
+
+            else:
+
+
+
+
+                title = (
+                    f"{title} | "
+                    f"{resolution}"
+                )
+
+
+
+
+            output.append(
+                (
+                    f'#EXTINF:-1 '
+                    f'tvg-id="rutube_'
+                    f'{video.internal_id}_'
+                    f'{index}" '
+                    f'tvg-name="{title}",'
+                    f'{title}'
+                )
+            )
+
+
+
+
+            output.append(
+                stream.url
+            )
+
+
+
+
+        return (
+            "\n".join(output)
+            + "\n"
+        )
+
+
+
+
+    # ========================================================
+    # TV DISCOVERY
+    # ========================================================
+
+
+
+
+    def discover_tv_catalog(
+        self,
+        source_url: str = DISCOVERY_SOURCE_URL,
+        max_pages: int = DEFAULT_MAX_PAGES,
+        max_empty_pages: int = DEFAULT_MAX_EMPTY_PAGES,
+        output_dir: Optional[Path] = None,
+        target_count: int = TV_TARGET_COUNT,
+    ) -> List[Dict[str, Any]]:
+        """
+        Финальный TV Discovery:
+
+        1. Сначала загружаем артефакты предыдущих Workflow-запусков.
+        2. Берём только контексты с явным маркером *Телеканалы*.
+        3. Строим множество уникальных реальных ТВ-каналов.
+        4. Если до target_count не хватило — ограниченно ищем дополнительные
+           ТВ-карточки через YouTube, а найденные названия разрешаем в Rutube.
+        5. Discovery останавливается сразу после target_count.
+
+        Важное изменение: старый бесконечный обход всех категорий/страниц
+        больше не является главным механизмом набора 400 каналов.
+        """
+        output_dir = Path(output_dir or OUTPUT_DIR)
+        target_count = max(1, int(target_count))
+
+        logging.info("TV DISCOVERY TARGET: %d UNIQUE CHANNELS", target_count)
+        logging.info("TV DISCOVERY STEP 1: previous Workflow artifacts")
+
+        cards = load_previous_tv_cards(output_dir)
+        history = load_previous_traversal_and_telemetry(output_dir)
+        cards.extend(history["cards"])
+        self.previous_telemetry = history["telemetry"]
+        unique_cards = _unique_tv_cards(cards, target_count)
+
+        logging.info(
+            "TV DISCOVERY HISTORY RESULT: artifact+traversal unique=%d/%d telemetry=%d",
+            len(unique_cards), target_count, len(self.previous_telemetry),
+        )
+
+        # Сначала используем старый механизм обхода, но строго ограниченно.
+        # Это восстановление/добор старой наработки, а не бесконечный crawler.
+        if len(unique_cards) < target_count:
+            missing = target_count - len(unique_cards)
+            logging.info(
+                "TV DISCOVERY STEP 2: bounded legacy traversal, missing=%d pages<=%d",
+                missing, max_pages,
+            )
+            traversal_cards = self._bounded_legacy_traversal(
+                source_url=source_url,
+                max_pages=min(max(1, int(max_pages)), LEGACY_TRAVERSAL_MAX_PAGES),
+                max_empty_pages=min(max(1, int(max_empty_pages)), LEGACY_TRAVERSAL_MAX_EMPTY_PAGES),
+                target_count=missing,
+            )
+            unique_cards = _unique_tv_cards(unique_cards + traversal_cards, target_count)
+            logging.info("TV DISCOVERY TRAVERSAL RESULT: unique=%d/%d", len(unique_cards), target_count)
+
+        if len(unique_cards) < target_count:
+            missing = target_count - len(unique_cards)
+            logging.info(
+                "TV DISCOVERY STEP 2: YouTube supplemental search, missing=%d",
+                missing,
+            )
+            yt_cards = self._discover_missing_tv_cards_from_youtube(
+                missing=missing,
+                existing_cards=unique_cards,
+                max_candidates=YOUTUBE_DISCOVERY_MAX_CANDIDATES,
+            )
+            unique_cards = _unique_tv_cards(
+                unique_cards + yt_cards,
+                target_count,
+            )
+
+        if len(unique_cards) < target_count:
+            logging.warning(
+                "TV DISCOVERY: only %d/%d unique TV channels available; "
+                "NO unlimited catalog scan is started.",
+                len(unique_cards),
+                target_count,
+            )
+
+        save_cumulative_tv_cards(output_dir, unique_cards)
+
+        logging.info(
+            "TV DISCOVERY FINAL: %d unique TV channels",
+            len(unique_cards),
+        )
+        return unique_cards
+
+    def _bounded_legacy_traversal(
+        self,
+        source_url: str,
+        max_pages: int,
+        max_empty_pages: int,
+        target_count: int,
+    ) -> List[Dict[str, Any]]:
+        """Ограниченный обход старых полок/категорий до нужного количества."""
+        result: List[Dict[str, Any]] = []
+        seen = set()
+        try:
+            shelves = self._discover_category_pages(source_url)
+        except Exception as exc:
+            logging.warning("Legacy traversal shelf discovery failed: %s", exc)
+            shelves = []
+        if not shelves:
+            shelves = [("TV", source_url), ("TV Program", TV_PROGRAM_SOURCE_URL)]
+
+        for category, base_url in shelves:
+            if len(result) >= target_count:
+                break
+            empty = 0
+            for page in range(1, max_pages + 1):
+                if len(result) >= target_count:
+                    break
+                page_url = self._make_page_url(base_url, page)
+                try:
+                    response = self._request("GET", page_url, "tv_bounded_traversal")
+                    found = self._parse_tv_page(response.text, category, page_url)
+                except Exception as exc:
+                    logging.debug("Traversal page failed: %s | %s", page_url, exc)
+                    empty += 1
+                    if empty >= max_empty_pages:
+                        break
+                    continue
+                if not found:
+                    empty += 1
+                    if empty >= max_empty_pages:
+                        break
+                    continue
+                empty = 0
+                for card in found:
+                    card["artifact_marker"] = "*Телеканалы*"
+                    card["discovered_from"] = "bounded_legacy_traversal"
+                    key = _normalize_tv_identity(str(card.get("title") or ""), str(card.get("video_id") or ""))
+                    if key in seen:
+                        continue
+                    seen.add(key)
+                    result.append(card)
+                    if len(result) >= target_count:
+                        break
+        return result
+
+    # ========================================================
+    # YOUTUBE SUPPLEMENTAL DISCOVERY
+    # ========================================================
+
+    def _discover_missing_tv_cards_from_youtube(
+        self,
+        missing: int,
+        existing_cards: List[Dict[str, Any]],
+        max_candidates: int = YOUTUBE_DISCOVERY_MAX_CANDIDATES,
+    ) -> List[Dict[str, Any]]:
+        """Ищет недостающие TV seeds на YouTube и пытается разрешить их в Rutube."""
+        if missing <= 0:
+            return []
+
+        existing_keys = {
+            _normalize_tv_identity(
+                str(card.get("title") or ""),
+                str(card.get("video_id") or ""),
+            )
+            for card in existing_cards
+        }
+        candidates: List[Dict[str, Any]] = []
+        seen_titles = set()
+
+        for query in YOUTUBE_DISCOVERY_QUERIES:
+            if len(candidates) >= max_candidates:
+                break
+            try:
+                params = urlencode({"search_query": query})
+                url = f"https://www.youtube.com/results?{params}"
+                response = self._request(
+                    "GET",
+                    url,
+                    "youtube_tv_discovery",
+                )
+                text = response.text
+            except Exception as exc:
+                logging.warning("YouTube TV discovery failed: %s", exc)
+                continue
+
+            # ytInitialData содержит title для videoRenderer. Берём только
+            # названия, а не считаем YouTube ID конечным Rutube video_id.
+            title_patterns = [
+                r'"videoRenderer".*?"title":\{"runs":\[\{"text":"(.*?)"',
+                r'"videoRenderer".*?"title":\{"simpleText":"(.*?)"',
+            ]
+            for pattern in title_patterns:
+                for match in re.finditer(pattern, text, re.DOTALL):
+                    raw_title = match.group(1)
+                    try:
+                        title = json.loads('"' + raw_title.replace('\\"', '\\"') + '"')
+                    except Exception:
+                        title = html.unescape(raw_title)
+                    title = re.sub(r"\\u[0-9a-fA-F]{4}", " ", title)
+                    title = re.sub(r"\s+", " ", title).strip()
+                    if not title:
+                        continue
+                    if not re.search(r"(телеканал|тв|канал|эфир|live)", title, re.IGNORECASE):
+                        continue
+                    identity = _normalize_tv_identity(title)
+                    if identity in existing_keys or identity in seen_titles:
+                        continue
+                    seen_titles.add(identity)
+                    candidates.append({
+                        "title": title,
+                        "category": "*Телеканалы*",
+                        "artifact_marker": "*Телеканалы*",
+                        "card_type": "tv_seed",
+                        "source_url": url,
+                        "catalog_url": "",
+                        "logo": "",
+                        "discovered_from": "youtube",
+                        "discovered_at": datetime.now(timezone.utc).isoformat(),
+                    })
+                    if len(candidates) >= max_candidates:
+                        break
+                if len(candidates) >= max_candidates:
+                    break
+
+        # Теперь название из YouTube используется как seed для поиска реальной
+        # Rutube live-карточки. Если Rutube не дал ID — seed не отправляется в HLS.
+        resolved: List[Dict[str, Any]] = []
+        for candidate in candidates:
+            if len(resolved) >= missing:
+                break
+            title = candidate["title"]
+            try:
+                search_url = (
+                    "https://rutube.ru/search/?"
+                    + urlencode({"query": title})
+                )
+                response = self._request(
+                    "GET",
+                    search_url,
+                    "rutube_tv_search",
+                )
+                found = self._parse_tv_page(
+                    response.text,
+                    "*Телеканалы*",
+                    search_url,
+                )
+            except Exception as exc:
+                logging.debug("Rutube resolution failed for %s: %s", title, exc)
+                continue
+
+            for card in found:
+                if len(resolved) >= missing:
+                    break
+                card["artifact_marker"] = "*Телеканалы*"
+                card["discovered_from"] = "youtube->rutube"
+                identity = _normalize_tv_identity(
+                    str(card.get("title") or title),
+                    str(card.get("video_id") or ""),
+                )
+                if identity in existing_keys:
+                    continue
+                resolved.append(card)
+                existing_keys.add(identity)
+
+        logging.info(
+            "TV DISCOVERY YOUTUBE: seeds=%d resolved_rutube_cards=%d",
+            len(candidates),
+            len(resolved),
+        )
+        return resolved
+
+    # ========================================================
+    # CATEGORY DISCOVERY
+    # ========================================================
+
+
+
+
+    def _discover_category_pages(
+        self,
+        source_url: str,
+    ) -> List[
+        Tuple[str, str]
+    ]:
+
+
+
+
+        result: List[
+            Tuple[str, str]
+        ] = []
+
+
+
+
+        # ----------------------------------------------------
+        # ЭТАП 1: API Discovery полок (shelves / resources)
+        # из https://rutube.ru/api/feeds/live/
+        #
+        # Это основной источник полок.
+        # Технические resources (tvfavorites, history, topic
+        # и т.п.) отфильтровываются.
+        # ----------------------------------------------------
+
+
+
+
+        TECHNICAL_SHELF_KEYWORDS = {
+            "tvfavorites",
+            "history",
+            "topic",
+            "assets",
+            "banner",
+            "autowidget",
+            "continue_watch",
+            "popular_in_live",
+            "live_by_topic",
+            "tvarchive",
+            "feedsource",
+        }
+
+
+
+
+        try:
+            api_url = "https://rutube.ru/api/feeds/live/"
+            response = self._request(
+                "GET",
+                api_url,
+                "tv_api_shelves_discovery",
+            )
+            api_data = self._json(response, "tv_api_shelves")
+
+
+
+
+            for tab in api_data.get("tabs", []):
+                tab_name = tab.get("name") or "Без названия"
+                tab_slug = tab.get("slug") or ""
+
+
+                # Ссылка самой вкладки, если есть
+                tab_url = tab.get("url") or tab.get("link", {}).get("url")
+                if isinstance(tab_url, dict):
+                    tab_url = tab_url.get("url")
+
+
+                if tab_url and isinstance(tab_url, str):
+                    if not any(u == tab_url for _, u in result):
+                        result.append((tab_name, tab_url))
+
+
+                # Resources внутри вкладки = полки
+                for res in tab.get("resources", []):
+                    res_name = (
+                        res.get("name")
+                        or res.get("extra_params", {}).get("name")
+                        or "Полка"
+                    )
+                    res_url = res.get("site_url") or res.get("url")
+                    object_id = str(res.get("object_id") or "").lower()
+
+
+                    # Фильтр технических полок
+                    if any(kw in object_id for kw in TECHNICAL_SHELF_KEYWORDS):
+                        continue
+                    if any(kw in (res_url or "").lower() for kw in TECHNICAL_SHELF_KEYWORDS):
+                        continue
+                    if any(kw in res_name.lower() for kw in (
+                        "избранное", "вы смотрели", "баннер"
+                    )):
+                        continue
+
+
+                    if res_url and isinstance(res_url, str):
+                        # Если это API-url, превращаем в человеческий site_url
+                        if "api." in res_url or "/api/" in res_url:
+                            # Пропускаем чистые API-эндпоинты без site_url
+                            if not res.get("site_url"):
+                                continue
+                            res_url = res.get("site_url")
+
+
+                        if res_url and not any(u == res_url for _, u in result):
+                            result.append((res_name, res_url))
+
+
+            logging.info(
+                "API shelves discovered: %d",
+                len(result),
+            )
+
+
+        except Exception as exc:
+            logging.warning(
+                "API shelves discovery failed: %s",
+                exc,
+            )
+
+
+
+
+        # ----------------------------------------------------
+        # ЭТАП 2: HTML fallback (как было)
+        # ----------------------------------------------------
+
+
+
+
+        try:
+
+
+
+
+            response = self._request(
+                "GET",
+                source_url,
+                "tv_category_discovery",
+            )
+
+
+
+
+            text = response.text
+
+
+
+
+        except Exception as exc:
+
+
+
+
+            logging.warning(
+                "Category discovery failed: %s",
+                exc,
+            )
+
+
+
+
+            return result
+
+
+
+
+        # Сначала ищем ссылки, у которых в видимом тексте
+        # есть название категории.
+        category_names = [
+            "Федеральные",
+            "Региональные",
+            "Новости",
+            "Развлекательные",
+            "Кино и сериалы",
+            "Спорт",
+            "Детские",
+            "Мультфильмы",
+            "Музыка",
+            "Познавательные",
+            "Телемагазин",
+            "18+",
+            "Религия",
+        ]
+
+
+
+
+
+
+        # Обычные <a href=...>TEXT</a>
+        anchor_pattern = re.compile(
+            r"<a\b[^>]*"
+            r'href\s*=\s*["\']([^"\']+)["\']'
+            r"[^>]*>"
+            r"(.*?)"
+            r"</a>",
+            re.IGNORECASE
+            | re.DOTALL,
+        )
+
+
+
+
+        for match in anchor_pattern.finditer(
+            text
+        ):
+
+
+
+
+            href = (
+                html.unescape(
+                    match.group(1)
+                )
+            )
+
+
+
+
+            anchor_text = re.sub(
+                r"<[^>]+>",
+                " ",
+                match.group(2),
+            )
+
+
+
+
+            anchor_text = (
+                html.unescape(
+                    anchor_text
+                )
+            )
+
+
+
+
+            anchor_text = re.sub(
+                r"\s+",
+                " ",
+                anchor_text,
+            ).strip()
+
+
+
+
+            if not href:
+                continue
+
+
+
+
+            absolute = urljoin(
+                source_url,
+                href,
+            )
+
+
+
+
+            parsed = urlparse(
+                absolute
+            )
+
+
+
+
+            if parsed.netloc.lower() != (
+                "rutube.ru"
+            ):
+                continue
+
+
+
+
+            for category_name in (
+                category_names
+            ):
+
+
+
+
+                if (
+                    anchor_text.lower()
+                    == category_name.lower()
+                ):
+
+
+
+
+                    if not any(
+                        existing_url == absolute
+                        for _, existing_url
+                        in result
+                    ):
+
+
+
+
+                        result.append(
+                            (
+                                category_name,
+                                absolute,
+                            )
+                        )
+
+
+
+
+                    break
+
+
+
+
+        return result
+
+
+
+
+    # ========================================================
+    # TV PAGE PARSER
+    # ========================================================
+
+
+
+
+    def _parse_tv_page(
+        self,
+        page_html: str,
+        category: str,
+        page_url: str,
+    ) -> List[Dict[str, Any]]:
+        """
+        Extract ONLY real Rutube TV live cards.
+
+
+        IMPORTANT:
+        - Do not scan arbitrary /video/<id> links.
+        - Do not scan arbitrary JSON ``id`` fields.
+        - A channel occurrence is represented by a real /live/video/<id> URL.
+        - The same channel may occur on several shelves/pages; those
+          occurrences are intentionally preserved.
+        - Repeated references to the same card inside one HTML page are
+          markup duplicates, not additional catalog occurrences, so the
+          exact same live URL is emitted only once per page.
+        """
+
+
+        records: List[Dict[str, Any]] = []
+        seen_on_this_page = set()
+
+
+        live_pattern = re.compile(
+            r"(?P<href>(?:https?://rutube\.ru)?/live/video/(?P<id>[A-Za-z0-9_-]{10,})/?)",
+            re.IGNORECASE,
+        )
+
+
+        for match in live_pattern.finditer(page_html):
+            video_id = match.group("id")
+            if not video_id:
+                continue
+
+
+            # Normalize only the card URL for the local markup check.
+            # We deliberately DO NOT use this as global deduplication.
+            card_key = video_id.lower()
+            if card_key in seen_on_this_page:
+                continue
+            seen_on_this_page.add(card_key)
+
+
+            position = match.start()
+            context_start = max(0, position - 3500)
+            context_end = min(len(page_html), position + 3500)
+            context = page_html[context_start:context_end]
+
+
+            title = self._extract_title_from_context(context, video_id)
+            logo = self._extract_logo_from_context(context)
+
+
+            # Never let generic UI text become a channel name.
+            bad_titles = {
+                "rutube", "rutube tv", "прямой эфир",
+                "live", "сейчас", "смотреть",
+                "главная", "телеканалы",
+            }
+            if title.strip().lower() in bad_titles:
+                title = f"Rutube {video_id}"
+
+
+            records.append({
+                "video_id": video_id,
+                "title": title,
+                "category": category,
+                "source_url": page_url,
+                "catalog_url": f"https://rutube.ru/live/video/{video_id}/",
+                "logo": logo,
+                "card_type": "live",
+                "discovered_at": datetime.now(timezone.utc).isoformat(),
+            })
+
+
+        return records
+
+
+    # ========================================================
+    # TITLE EXTRACTION
+    # ========================================================
+
+
+
+
+    @staticmethod
+    def _extract_title_from_context(
+        context: str,
+        video_id: str,
+    ) -> str:
+
+
+
+
+        patterns = [
+            r'"title"\s*:\s*"([^"]+)"',
+
+
+
+
+            r'"name"\s*:\s*"([^"]+)"',
+
+
+
+
+            r'aria-label\s*=\s*["\']'
+            r'([^"\']+)'
+            r'["\']',
+
+
+
+
+            r'title\s*=\s*["\']'
+            r'([^"\']+)'
+            r'["\']',
+
+
+
+
+            r'<h[1-6][^>]*>'
+            r'(.*?)'
+            r'</h[1-6]>',
+        ]
+
+
+
+
+        for pattern in patterns:
+
+
+
+
+            match = re.search(
+                pattern,
+                context,
+                re.IGNORECASE
+                | re.DOTALL,
+            )
+
+
+
+
+            if not match:
+                continue
+
+
+
+
+            value = (
+                match.group(1)
+            )
+
+
+
+
+            value = re.sub(
+                r"<[^>]+>",
+                " ",
+                value,
+            )
+
+
+
+
+            value = html.unescape(
+                value
+            )
+
+
+
+
+            value = re.sub(
+                r"\s+",
+                " ",
+                value,
+            ).strip()
+
+
+
+
+            if not value:
+                continue
+
+
+
+
+            # Не использовать технические значения
+            # как название.
+            if value.lower() in {
+                "прямой эфир",
+                "live",
+                "сейчас",
+                "смотреть",
+            }:
+                continue
+
+
+
+
+            if len(value) > 500:
+                continue
+
+
+
+
+            return value
+
+
+
+
+        return (
+            f"Rutube {video_id}"
+        )
+
+
+
+
+    # ========================================================
+    # LOGO EXTRACTION
+    # ========================================================
+
+
+
+
+    @staticmethod
+    def _extract_logo_from_context(
+        context: str,
+    ) -> Optional[str]:
+
+
+
+
+        patterns = [
+            r'"logo"\s*:\s*"([^"]+)"',
+
+
+
+
+            r'"avatar"\s*:\s*"([^"]+)"',
+
+
+
+
+            r'"image"\s*:\s*"([^"]+)"',
+
+
+
+
+            r'<img[^>]+src\s*=\s*'
+            r'["\']([^"\']+)["\']',
+        ]
+
+
+
+
+        for pattern in patterns:
+
+
+
+
+            match = re.search(
+                pattern,
+                context,
+                re.IGNORECASE
+                | re.DOTALL,
+            )
+
+
+
+
+            if not match:
+                continue
+
+
+
+
+            value = (
+                html.unescape(
+                    match.group(1)
+                )
+                .strip()
+            )
+
+
+
+
+            if not value:
+                continue
+
+
+
+
+            if value.startswith(
+                "//"
+            ):
+                value = (
+                    "https:"
+                    + value
+                )
+
+
+
+
+            if value.startswith(
+                "/"
+            ):
+                value = urljoin(
+                    DISCOVERY_SOURCE_URL,
+                    value,
+                )
+
+
+
+
+            if value.startswith(
+                "http://"
+            ) or value.startswith(
+                "https://"
+            ):
+                return value
+
+
+
+
+        return None
+
+
+
+
+    # ========================================================
+    # PAGE URL
+    # ========================================================
+
+
+
+
+    @staticmethod
+    def _make_page_url(
+        base_url: str,
+        page: int,
+    ) -> str:
+
+
+
+
+        if page <= 1:
+            return base_url
+
+
+
+
+        parsed = urlparse(
+            base_url
+        )
+
+
+
+
+        query = parse_qs(
+            parsed.query,
+            keep_blank_values=True,
+        )
+
+
+
+
+        query["page"] = [
+            str(page)
+        ]
+
+
+
+
+        new_query = urlencode(
+            query,
+            doseq=True,
+        )
+
+
+
+
+        return urlunparse((
+            parsed.scheme,
+            parsed.netloc,
+            parsed.path,
+            parsed.params,
+            new_query,
+            parsed.fragment,
+        ))
+
+
+
+
+    # ========================================================
+    # NEXT PAGE DETECTION
+    # ========================================================
+
+
+
+
+    @staticmethod
+    def _has_next_page(
+        page_html: str,
+        current_page: int,
+    ) -> bool:
+
+
+
+
+        next_patterns = [
+            r'href\s*=\s*["\'][^"\']*'
+            r'page[-=]'
+            r'\d+[^"\']*["\']',
+
+
+
+
+            r'"page"\s*:\s*'
+            r'["\']?'
+            r'\d+',
+
+
+
+
+            r'"hasNext"\s*:\s*true',
+
+
+
+
+            r'"has_next"\s*:\s*true',
+
+
+
+
+            r'"next"\s*:\s*',
+        ]
+
+
+
+
+        for pattern in next_patterns:
+
+
+
+
+            if re.search(
+                pattern,
+                page_html,
+                re.IGNORECASE,
+            ):
+                return True
+
+
+
+
+        return False
+
+
+
+
+    # ========================================================
+    # TV CATALOG SCRAPE
+    # ========================================================
+
+
+
+
+    def scrape_tv_catalog(
+        self,
+        source_url: str = DISCOVERY_SOURCE_URL,
+        max_pages: int = DEFAULT_MAX_PAGES,
+        max_empty_pages: int = DEFAULT_MAX_EMPTY_PAGES,
+        output_dir: Optional[Path] = None,
+        target_count: int = TV_TARGET_COUNT,
+    ) -> Dict[str, Any]:
+
+
+
+
+        self.started_at = (
+            datetime.now(
+                timezone.utc
+            ).isoformat()
+        )
+
+
+
+
+        discovered = (
+            self.discover_tv_catalog(
+                source_url=source_url,
+                max_pages=max_pages,
+                max_empty_pages=max_empty_pages,
+                output_dir=output_dir,
+                target_count=target_count,
+            )
+        )
+
+
+
+
+        result: List[
+            Dict[str, Any]
+        ] = []
+
+
+
+
+        total = len(
+            discovered
+        )
+
+
+
+
+        logging.info(
+            "TV DISCOVERY PROCESSING %d RECORDS",
+            total,
+        )
+
+
+
+
+        for number, record in enumerate(
+            discovered,
+            start=1,
+        ):
+
+
+
+
+            video_id = (
+                record.get(
+                    "video_id"
+                )
+            )
+
+
+
+
+            if not video_id:
+                continue
+
+
+
+
+            title = (
+                record.get(
+                    "title"
+                )
+                or
+                f"Rutube {video_id}"
+            )
+
+
+
+
+            category = (
+                record.get(
+                    "category"
+                )
+                or
+                "Без категории"
+            )
+
+
+
+
+            logging.info(
+                "[%d/%d] %s | %s | %s",
+                number,
+                total,
+                category,
+                title,
+                video_id,
+            )
+
+
+
+
+            # ------------------------------------------------
+            # Копируем record целиком.
+            # ------------------------------------------------
+
+
+
+
+            item = dict(
+                record
+            )
+
+
+
+
+            item[
+                "hls_streams"
+            ] = []
+
+
+
+
+            item[
+                "stream_count"
+            ] = 0
+
+
+
+
+            item[
+                "status"
+            ] = "pending"
+
+
+
+
+            try:
+
+
+
+
+                # --------------------------------------------
+                # Получаем video metadata.
+                # --------------------------------------------
+
+
+
+
+                video = self.video(
+                    video_id
+                )
+
+
+
+
+                item[
+                    "internal_id"
+                ] = video.internal_id
+
+
+
+
+                item[
+                    "video_title"
+                ] = video.title
+
+
+
+
+                item[
+                    "author"
+                ] = video.author
+
+
+
+
+                item[
+                    "author_id"
+                ] = video.author_id
+
+
+
+
+                item[
+                    "video_category"
+                ] = video.category
+
+
+
+
+                item[
+                    "is_livestream"
+                ] = (
+                    self._detect_is_livestream(
+                        video.raw
+                    )
+                )
+
+
+
+
+                # Если HTML дал только техническое имя,
+                # используем название API.
+                #
+                # При этом название категории НЕ меняем.
+                if (
+                    not title
+                    or title.startswith(
+                        "Rutube "
+                    )
+                ):
+
+
+
+
+                    if video.title:
+                        item[
+                            "title"
+                        ] = video.title
+
+
+
+
+                # --------------------------------------------
+                # Получаем live HLS.
+                # --------------------------------------------
+
+
+
+
+                hls_streams = (
+                    self.get_live_streams(
+                        video_id
+                    )
+                )
+
+
+
+
+                # Никакой dedupe.
+                item[
+                    "hls_streams"
+                ] = list(
+                    hls_streams
+                )
+
+
+
+
+                item[
+                    "stream_count"
+                ] = len(
+                    hls_streams
+                )
+
+                # ------------------------------------------------
+                # После получения ВСЕХ signed HLS URL полностью
+                # опрашиваем каждый конкретный bl.rutube.ru URL.
+                # Сам список hls_streams не изменяем.
+                # ------------------------------------------------
+                item[
+                    "bl_rutube_poll"
+                ] = self.poll_all_bl_rutube_streams(
+                    hls_streams
+                )
+
+                item[
+                    "bl_rutube_poll_count"
+                ] = len(
+                    item["bl_rutube_poll"]
+                )
+
+                item[
+                    "bl_rutube_alive_count"
+                ] = sum(
+                    1
+                    for poll in item["bl_rutube_poll"]
+                    if poll.get("alive")
+                )
+
+                if hls_streams:
+
+
+
+
+                    item[
+                        "status"
+                    ] = "ok"
+
+
+
+
+                else:
+
+
+
+
+                    item[
+                        "status"
+                    ] = "no_hls"
+
+
+
+
+            except Exception as exc:
+
+
+
+
+                item[
+                    "status"
+                ] = "error"
+
+
+
+
+                item[
+                    "error"
+                ] = str(
+                    exc
+                )
+
+
+
+
+                logging.warning(
+                    (
+                        "CHANNEL ERROR: "
+                        "%s | %s"
+                    ),
+                    video_id,
+                    exc,
+                )
+
+
+
+
+            result.append(
+                item
+            )
+
+
+
+
+        self.finished_at = (
+            datetime.now(
+                timezone.utc
+            ).isoformat()
+        )
+
+
+
+
+        total_hls = sum(
+            len(
+                item.get(
+                    "hls_streams",
+                    [],
+                )
+            )
+            for item in result
+        )
+
+
+
+
+        with_hls = sum(
+            1
+            for item in result
+            if item.get(
+                "hls_streams"
+            )
+        )
+
+
+
+
+        without_hls = (
+            len(result)
+            - with_hls
+        )
+
+
+
+
+        errors = sum(
+            1
+            for item in result
+            if item.get(
+                "status"
+            ) == "error"
+        )
+
+
+
+
+        return {
+            "schema": {
+                "name":
+                    "RutubeTVDiscovery",
+
+
+
+
+                "version":
+                    VERSION,
+            },
+
+
+
+
+            "meta": {
+                "generated_at":
+                    datetime.now(
+                        timezone.utc
+                    ).isoformat(),
+
+
+
+
+                "started_at":
+                    self.started_at,
+
+
+
+
+                "finished_at":
+                    self.finished_at,
+
+
+
+
+                "source_url":
+                    source_url,
+
+
+
+
+                "tv_program_url":
+                    TV_PROGRAM_SOURCE_URL,
+
+
+
+
+                "python_version":
+                    sys.version,
+
+
+
+
+                "platform":
+                    sys.platform,
+            },
+
+
+
+
+            "settings": {
+                "deduplication":
+                    False,
+
+
+
+
+                "deduplication_method":
+                    "NONE",
+
+
+
+
+                "group":
+                    RUTUBE_GROUP,
+
+
+
+
+                "epg":
+                    M3U_EPG_URL,
+
+
+
+
+                "user_agent":
+                    M3U_USER_AGENT,
+            },
+
+
+
+
+            "statistics": {
+                "discovered_records":
+                    len(discovered),
+                "unique_tv_channels":
+                    len(discovered),
+                "tv_target_count":
+                    target_count,
+
+
+
+
+                "processed_records":
+                    len(result),
+
+
+
+
+                "with_hls":
+                    with_hls,
+
+
+
+
+                "without_hls":
+                    without_hls,
+
+
+
+
+                "errors":
+                    errors,
+
+
+
+
+                "total_hls_urls":
+                    total_hls,
+
+
+
+
+                "categories":
+                    self._category_statistics(
+                        result
+                    ),
+            },
+
+
+
+
+            "channels":
+                result,
+
+
+
+
+            "http": {
+                "requests": [
+                    asdict(stat)
+                    for stat
+                    in self.request_stats
+                ]
+            },
+        }
+
+
+
+
+    # ========================================================
+    # LIVE DETECTION
+    # ========================================================
+
+
+
+
+    @staticmethod
+    def _detect_is_livestream(
+        data: Dict[str, Any],
+    ) -> Optional[bool]:
+
+
+
+
+        for key in (
+            "is_livestream",
+            "is_live",
+            "livestream",
+        ):
+
+
+
+
+            if key in data:
+
+
+
+
+                value = data[
+                    key
+                ]
+
+
+
+
+                if isinstance(
+                    value,
+                    bool,
+                ):
+                    return value
+
+
+
+
+                if isinstance(
+                    value,
+                    str,
+                ):
+
+
+
+
+                    return (
+                        value.lower()
+                        in {
+                            "true",
+                            "1",
+                            "yes",
+                        }
+                    )
+
+
+
+
+        return None
+
+
+
+
+    # ========================================================
+    # CATEGORY STATISTICS
+    # ========================================================
+
+
+
+
+    @staticmethod
+    def _category_statistics(
+        records: List[
+            Dict[str, Any]
+        ],
+    ) -> Dict[str, Any]:
+
+
+
+
+        result = {}
+
+
+
+
+        for record in records:
+
+
+
+
+            category = (
+                record.get(
+                    "category"
+                )
+                or
+                "Без категории"
+            )
+
+
+
+
+            if category not in result:
+
+
+
+
+                result[
+                    category
+                ] = {
+                    "records":
+                        0,
+
+
+
+
+                    "with_hls":
+                        0,
+
+
+
+
+                    "hls_urls":
+                        0,
+                }
+
+
+
+
+            result[
+                category
+            ][
+                "records"
+            ] += 1
+
+
+
+
+            streams = (
+                record.get(
+                    "hls_streams",
+                    [],
+                )
+            )
+
+
+
+
+            result[
+                category
+            ][
+                "hls_urls"
+            ] += len(
+                streams
+            )
+
+
+
+
+            if streams:
+
+
+
+
+                result[
+                    category
+                ][
+                    "with_hls"
+                ] += 1
+
+
+
+
+        return result
+
+
+
+
+    # ========================================================
+    # TV M3U
+    # ========================================================
+
+
+
+
+    @classmethod
+    def make_tv_m3u(
+        cls,
+        records: List[
+            Dict[str, Any]
+        ],
+    ) -> str:
+
+
+
+
+        lines = [
+            (
+                "#EXTM3U "
+                f'url-tvg="{M3U_EPG_URL}"'
+            )
+        ]
+
+
+
+
+        # ----------------------------------------------------
+        # Discovery уже сформировал уникальный набор каналов.
+        # Здесь сохраняем его порядок; HLS URLs внутри карточки
+        # не дедуплицируем и не обрезаем.
+        # ----------------------------------------------------
+
+
+
+
+        for index, record in enumerate(
+            records,
+            start=1,
+        ):
+
+
+
+
+            title = (
+                record.get(
+                    "title"
+                )
+                or
+                record.get(
+                    "video_title"
+                )
+                or
+                f"Rutube TV {index}"
+            )
+
+
+
+
+            category = (
+                record.get(
+                    "category"
+                )
+                or
+                "Без категории"
+            )
+
+
+
+
+            video_id = (
+                record.get(
+                    "video_id"
+                )
+                or
+                ""
+            )
+
+
+
+
+            logo = (
+                record.get(
+                    "logo"
+                )
+                or
+                ""
+            )
+
+
+
+
+            hls_streams = (
+                record.get(
+                    "hls_streams",
+                    [],
+                )
+            )
+
+
+
+
+            # -----------------------------------------------
+            # Один occurrence канала может содержать
+            # несколько HLS URLs.
+            #
+            # Каждый URL сохраняем отдельной записью.
+            # -----------------------------------------------
+
+
+
+
+            for stream_index, stream_url in enumerate(
+                hls_streams,
+                start=1,
+            ):
+
+
+
+
+                safe_title = (
+                    cls._m3u_escape(
+                        title
+                    )
+                )
+
+
+
+
+                safe_category = (
+                    cls._m3u_escape(
+                        category
+                    )
+                )
+
+
+
+
+                group = (
+                    RUTUBE_GROUP
+                )
+
+
+
+
+                hierarchical_group = (
+                    f"{group}/{category}"
+                )
+
+
+
+
+                safe_group = (
+                    cls._m3u_escape(
+                        group
+                    )
+                )
+
+
+
+
+                safe_hierarchical_group = (
+                    cls._m3u_escape(
+                        hierarchical_group
+                    )
+                )
+
+
+
+
+                tvg_id = (
+                    "rutube_"
+                    f"{video_id}"
+                )
+
+
+
+
+                # Не добавляем stream_index в tvg-id,
+                # чтобы EPG мог сопоставляться с каналом.
+                #
+                # Даже если одна запись имеет несколько
+                # потоков — каждый URL всё равно сохраняется.
+
+
+
+
+                extinf = (
+                    "#EXTINF:-1 "
+                    f'tvg-id="{tvg_id}" '
+                    f'tvg-name="{safe_title}" '
+                    f'group-title="{safe_group}" '
+                    f'tvg-group="{safe_hierarchical_group}" '
+                    f'subgroup-title="{safe_category}"'
+                )
+
+
+
+
+                if logo:
+
+
+
+
+                    extinf += (
+                        " tvg-logo=\""
+                        + cls._m3u_escape(
+                            logo
+                        )
+                        + "\""
+                    )
+
+
+
+
+                extinf += (
+                    ","
+                    + safe_title
+                )
+
+
+
+
+                lines.append(
+                    extinf
+                )
+
+
+
+
+                lines.append(
+                    "#EXTVLCOPT:"
+                    "http-user-agent="
+                    + M3U_USER_AGENT
+                )
+
+
+
+
+                lines.append(
+                    stream_url
+                )
+
+
+
+
+        return (
+            "\n".join(
+                lines
+            )
+            + "\n"
+        )
+
+
+
+
+    # ========================================================
+    # M3U ESCAPE
+    # ========================================================
+
+
+
+
+    @staticmethod
+    def _m3u_escape(
+        value: Any,
+    ) -> str:
+
+
+
+
+        return (
+            str(value)
+            .replace(
+                '"',
+                "'",
+            )
+            .replace(
+                "\r",
+                " ",
+            )
+            .replace(
+                "\n",
+                " ",
+            )
+            .strip()
+        )
+
+
+
+
+    # ========================================================
+    # TV TXT
+    # ========================================================
+
+
+
+
+    @classmethod
+    def make_tv_txt(
+        cls,
+        report: Dict[str, Any],
+    ) -> str:
+
+
+
+
+        stats = (
+            report[
+                "statistics"
+            ]
+        )
+
+
+
+
+        lines = [
+            "=" * 90,
+
+
+
+
+            "RUTUBE TV DISCOVERY",
+
+
+
+
+            "=" * 90,
+
+
+
+
+            f"Version: {VERSION}",
+
+
+
+
+            f"Source: "
+            f"{report['meta']['source_url']}",
+
+
+
+
+            f"Generated: "
+            f"{report['meta']['generated_at']}",
+
+
+
+
+            "",
+
+
+
+
+            "DISCOVERY",
+
+
+
+
+            "-" * 90,
+
+
+
+
+            f"Discovered records : "
+            f"{stats['discovered_records']}",
+
+
+
+
+            f"Processed records  : "
+            f"{stats['processed_records']}",
+
+
+
+
+            f"With HLS           : "
+            f"{stats['with_hls']}",
+
+
+
+
+            f"Without HLS        : "
+            f"{stats['without_hls']}",
+
+
+
+
+            f"Errors             : "
+            f"{stats['errors']}",
+
+
+
+
+            f"Total HLS URLs     : "
+            f"{stats['total_hls_urls']}",
+
+
+
+
+            "",
+
+
+
+
+            "DISCOVERY: UNIQUE TV CHANNELS / TARGET 400",
+
+
+
+
+            "",
+
+
+
+
+            "CATEGORIES",
+
+
+
+
+            "-" * 90,
+        ]
+
+
+
+
+        for category, values in (
+            stats[
+                "categories"
+            ].items()
+        ):
+
+
+
+
+            lines.append(
+                (
+                    f"{category}: "
+                    f"records={values['records']} "
+                    f"with_hls={values['with_hls']} "
+                    f"hls_urls={values['hls_urls']}"
+                )
+            )
+
+
+
+
+        lines.extend([
+            "",
+            "CHANNEL RECORDS",
+            "-" * 90,
+        ])
+
+
+
+
+        for index, record in enumerate(
+            report[
+                "channels"
+            ],
+            start=1,
+        ):
+
+
+
+
+            title = (
+                record.get(
+                    "title"
+                )
+                or
+                record.get(
+                    "video_title"
+                )
+                or
+                ""
+            )
+
+
+
+
+            category = (
+                record.get(
+                    "category"
+                )
+                or
+                ""
+            )
+
+
+
+
+            video_id = (
+                record.get(
+                    "video_id"
+                )
+                or
+                ""
+            )
+
+
+
+
+            streams = (
+                record.get(
+                    "hls_streams",
+                    [],
+                )
+            )
+
+
+
+
+            lines.append(
+                (
+                    f"[{index}] "
+                    f"{category} | "
+                    f"{title} | "
+                    f"ID={video_id} | "
+                    f"HLS={len(streams)}"
+                )
+            )
+
+
+
+
+            for stream in streams:
+
+
+
+
+                lines.append(
+                    f"    {stream}"
+                )
+
+
+
+
+        lines.extend([
+            "",
+            "=" * 90,
+            "END",
+            "=" * 90,
+        ])
+
+
+
+
+        return (
+            "\n".join(
+                lines
+            )
+            + "\n"
+        )
+
+
+
+
+    # ========================================================
+    # TXT LEGACY REPORT
+    # ========================================================
+
+
+
+
+    @staticmethod
+    def make_txt_report(
+        report: Dict[str, Any],
+    ) -> str:
+
+
+
+
+        video = report[
+            "video"
+        ]
+
+
+
+
+        stats = report[
+            "statistics"
+        ]
+
+
+
+
+        streams = report[
+            "streams"
+        ]
+
+
+
+
+        lines = []
+
+
+
+
+        lines.append(
+            "=" * 80
+        )
+
+
+
+
+        lines.append(
+            "RUTUBE FULL SCRAPER REPORT"
+        )
+
+
+
+
+        lines.append(
+            "=" * 80
+        )
+
+
+
+
+        lines.append(
+            f"Report version: "
+            f"{report['schema']['version']}"
+        )
+
+
+
+
+        lines.append(
+            f"Generated: "
+            f"{report['meta']['generated_at']}"
+        )
+
+
+
+
+        lines.append("")
+
+
+
+
+        lines.append(
+            "VIDEO"
+        )
+
+
+
+
+        lines.append(
+            "-" * 80
+        )
+
+
+
+
+        lines.append(
+            f"Requested ID : "
+            f"{video['requested_id']}"
+        )
+
+
+
+
+        lines.append(
+            f"Internal ID  : "
+            f"{video['internal_id']}"
+        )
+
+
+
+
+        lines.append(
+            f"Title        : "
+            f"{video.get('title') or ''}"
+        )
+
+
+
+
+        lines.append(
+            f"Author       : "
+            f"{video.get('author') or ''}"
+        )
+
+
+
+
+        lines.append(
+            f"Category     : "
+            f"{video.get('category') or ''}"
+        )
+
+
+
+
+        lines.append(
+            f"Duration     : "
+            f"{video.get('duration') or ''}"
+        )
+
+
+
+
+        lines.append("")
+
+
+
+
+        lines.append(
+            "STREAM STATISTICS"
+        )
+
+
+
+
+        lines.append(
+            "-" * 80
+        )
+
+
+
+
+        lines.append(
+            f"Total streams: "
+            f"{stats['total_streams']}"
+        )
+
+
+
+
+        lines.append(
+            f"Alive streams: "
+            f"{stats['alive_streams']}"
+        )
+
+
+
+
+        lines.append(
+            f"Dead streams : "
+            f"{stats['dead_streams']}"
+        )
+
+
+
+
+        lines.append(
+            f"Availability : "
+            f"{stats['availability_percent']}%"
+        )
+
+
+
+
+        lines.append("")
+
+
+
+
+        lines.append(
+            "RESOLUTIONS"
+        )
+
+
+
+
+        lines.append(
+            "-" * 80
+        )
+
+
+
+
+        for resolution, count in sorted(
+            stats[
+                "resolutions"
+            ].items()
+        ):
+
+
+
+
+            lines.append(
+                f"{resolution:15} "
+                f"{count}"
+            )
+
+
+
+
+        lines.append("")
+
+
+
+
+        lines.append(
+            "STREAMS"
+        )
+
+
+
+
+        lines.append(
+            "-" * 80
+        )
+
+
+
+
+        for index, stream in enumerate(
+            streams,
+            start=1,
+        ):
+
+
+
+
+            lines.append(
+                f"[{index}] "
+                f"{stream.get('resolution') or '?'} "
+                f"| "
+                f"{stream.get('bandwidth_kbps') or 0:.0f} kbps "
+                f"| "
+                f"{stream.get('codecs') or '-'} "
+                f"| "
+                f"{'ALIVE' if stream.get('alive') else 'DEAD'} "
+                f"| "
+                f"score={stream.get('quality_score', 0):.2f}"
+            )
+
+
+
+
+            lines.append(
+                f"    URL: "
+                f"{stream.get('url')}"
+            )
+
+
+
+
+            lines.append(
+                f"    HTTP: "
+                f"{stream.get('http_status')}"
+            )
+
+
+
+
+            lines.append(
+                f"    Response: "
+                f"{stream.get('response_time_ms')} ms"
+            )
+
+
+
+
+        lines.append("")
+
+
+
+
+        lines.append(
+            "=" * 80
+        )
+
+
+
+
+        lines.append(
+            "END OF REPORT"
+        )
+
+
+
+
+        lines.append(
+            "=" * 80
+        )
+
+
+
+
+        return (
+            "\n".join(lines)
+            + "\n"
+        )
+
+
 
 
     # ========================================================
@@ -1513,179 +6328,6 @@ class RutubeScrapper:
     # ========================================================
 
 
-    @staticmethod
-    def _hash_url(
-        url: str,
-    ) -> str:
-
-
-        return hashlib.sha256(
-            url.encode(
-                "utf-8",
-                errors="ignore",
-            )
-        ).hexdigest()
-
-
-    @staticmethod
-    def _to_int(
-        value: Any,
-    ) -> Optional[int]:
-
-
-        if value is None:
-            return None
-
-
-        try:
-            return int(
-                float(str(value).strip())
-            )
-        except Exception:
-            return None
-
-
-    @staticmethod
-    def _to_float(
-        value: Any,
-    ) -> Optional[float]:
-
-
-        if value is None:
-            return None
-
-
-        try:
-            return float(
-                str(value).strip()
-            )
-        except Exception:
-            return None
-
-
-    @staticmethod
-    def _extract_author(
-        data: Dict[str, Any],
-    ) -> Optional[str]:
-
-
-        author = data.get(
-            "author"
-        )
-
-
-        if isinstance(
-            author,
-            dict,
-        ):
-
-
-            return (
-                author.get("name")
-                or author.get("title")
-                or author.get("username")
-            )
-
-
-        if author is not None:
-            return str(author)
-
-
-        return None
-
-
-    @staticmethod
-    def _extract_author_id(
-        data: Dict[str, Any],
-    ) -> Optional[str]:
-
-
-        author = data.get(
-            "author"
-        )
-
-
-        if isinstance(
-            author,
-            dict,
-        ):
-
-
-            value = (
-                author.get("id")
-                or author.get("uuid")
-            )
-
-
-            if value is not None:
-                return str(value)
-
-
-        value = (
-            data.get("author_id")
-            or data.get("authorId")
-        )
-
-
-        if value is not None:
-            return str(value)
-
-
-        return None
-
-
-    @staticmethod
-    def _extract_category(
-        data: Dict[str, Any],
-    ) -> Optional[str]:
-
-
-        category = data.get(
-            "category"
-        )
-
-
-        if isinstance(
-            category,
-            dict,
-        ):
-
-
-            return (
-                category.get("name")
-                or category.get("title")
-            )
-
-
-        if category is not None:
-            return str(category)
-
-
-        return None
-
-
-    @staticmethod
-    def _sanitize_visitor(
-        data: Dict[str, Any],
-    ) -> Dict[str, Any]:
-
-
-        result = dict(data)
-
-
-        for key in (
-            "club_params_encrypted",
-            "token",
-            "access_token",
-            "refresh_token",
-        ):
-
-
-            if key in result:
-                result[key] = "<REDACTED>"
-
-
-        return result
 
 
     @staticmethod
@@ -1695,1474 +6337,445 @@ class RutubeScrapper:
     ) -> Dict[str, Any]:
 
 
+
+
         try:
-            value = response.json()
+
+
+
+
+            data = response.json()
+
+
+
+
         except Exception as exc:
+
+
+
+
             raise RutubeScrapperError(
                 f"{name}: invalid JSON: {exc}"
             ) from exc
 
 
+
+
         if not isinstance(
-            value,
+            data,
             dict,
         ):
 
 
+
+
             raise RutubeScrapperError(
-                f"{name}: JSON root is not an object"
+                f"{name}: expected JSON object"
             )
 
 
-        return value
 
 
-# ============================================================
-# TV DISCOVERY DATA
-# ============================================================
+        return data
 
 
-@dataclass
-class TVCard:
-    name: str = ""
-    video_id: str = ""
-    category: str = ""
-    url: str = ""
-    source: str = ""
-    shelf: str = ""
-    marker: str = ""
-    raw: Dict[str, Any] = field(
-        default_factory=dict
-    )
-
-
-# ============================================================
-# DISCOVERY HELPERS
-# ============================================================
-
-
-TECHNICAL_VIDEO_ID_TOKENS = {
-    "tvfavorites",
-    "history",
-    "topic",
-    "assets",
-    "autowidget",
-    "feedsource",
-}
-
-
-LIVE_PATH_MARKERS = (
-    "/live/",
-    "/tv/",
-    "/online/",
-    "/broadcast/",
-    "/channel/",
-)
-
-
-VIDEO_ID_RE = re.compile(
-    r"/video/([0-9a-fA-F-]{20,})"
-)
-
-
-JSON_VIDEO_ID_KEYS = (
-    "video_id",
-    "videoId",
-    "video",
-    "id",
-    "uuid",
-)
-
-
-TV_NAME_KEYS = (
-    "title",
-    "name",
-    "channel_name",
-    "channelName",
-)
-
-
-CATEGORY_KEYS = (
-    "category",
-    "category_name",
-    "categoryName",
-)
-
-
-SHELF_KEYS = (
-    "shelf",
-    "shelf_name",
-    "shelfName",
-    "section",
-    "section_name",
-)
-
-
-# ============================================================
-# TV DISCOVERY
-# ============================================================
-
-
-class TVDiscoveryMixin:
-
-
-    def __init__(
-        self,
-        *args,
-        **kwargs,
-    ):
-        super().__init__(*args, **kwargs)
 
 
     @staticmethod
-    def _clean_text(
+    def _to_int(
         value: Any,
-    ) -> str:
+    ) -> Optional[int]:
+
+
 
 
         if value is None:
-            return ""
-
-
-        text = html.unescape(
-            str(value)
-        )
-
-
-        text = re.sub(
-            r"\s+",
-            " ",
-            text,
-        )
-
-
-        return text.strip()
-
-
-    @staticmethod
-    def _looks_like_technical_video_id(
-        value: Any,
-    ) -> bool:
-
-
-        if value is None:
-            return True
-
-
-        text = str(value).strip()
-
-
-        if not text:
-            return True
-
-
-        low = text.lower()
-
-
-        for token in TECHNICAL_VIDEO_ID_TOKENS:
-
-
-            if token in low:
-                return True
-
-
-        if low.startswith(
-            (
-                "banner-",
-                "feedsource-",
-            )
-        ):
-            return True
-
-
-        return False
-
-
-    @classmethod
-    def _extract_video_id_from_url(
-        cls,
-        url: str,
-    ) -> Optional[str]:
-
-
-        if not url:
             return None
 
 
-        match = VIDEO_ID_RE.search(
-            url
-        )
 
 
-        if match:
+        try:
+            return int(
+                float(value)
+            )
 
 
-            value = match.group(1)
 
 
-            if not cls._looks_like_technical_video_id(
-                value
-            ):
-
-
-                return value
-
-
-        parsed = urlparse(
-            url
-        )
-
-
-        path_parts = [
-            part
-            for part in parsed.path.split("/")
-            if part
-        ]
-
-
-        for index, part in enumerate(
-            path_parts
+        except (
+            TypeError,
+            ValueError,
         ):
+            return None
 
 
-            if part.lower() == "video":
-                if index + 1 < len(
-                    path_parts
-                ):
 
 
-                    candidate = (
-                        path_parts[index + 1]
-                    )
-
-
-                    if not cls._looks_like_technical_video_id(
-                        candidate
-                    ):
-                        return candidate
-
-
-        return None
-
-
-    @classmethod
-    def _extract_video_id(
-        cls,
+    @staticmethod
+    def _to_float(
         value: Any,
+    ) -> Optional[float]:
+
+
+
+
+        if value is None:
+            return None
+
+
+
+
+        try:
+            return float(
+                value
+            )
+
+
+
+
+        except (
+            TypeError,
+            ValueError,
+        ):
+            return None
+
+
+
+
+    @staticmethod
+    def _hash_url(
+        url: str,
+    ) -> str:
+
+
+
+
+        return hashlib.sha256(
+            url.encode(
+                "utf-8",
+                errors="replace",
+            )
+        ).hexdigest()
+
+
+
+
+    @staticmethod
+    def _extract_author(
+        data: Dict[str, Any],
     ) -> Optional[str]:
 
 
+
+
+        author = data.get(
+            "author"
+        )
+
+
+
+
         if isinstance(
-            value,
+            author,
+            dict,
+        ):
+
+
+
+
+            return (
+                author.get("name")
+                or author.get("title")
+                or author.get("username")
+            )
+
+
+
+
+        if isinstance(
+            author,
             str,
         ):
 
 
-            text = value.strip()
 
 
-            if not text:
-                return None
+            return author
 
 
-            direct = cls._extract_video_id_from_url(
-                text
+
+
+        return (
+            data.get(
+                "author_name"
             )
+            or
+            data.get(
+                "user_name"
+            )
+        )
 
 
-            if direct:
-                return direct
 
 
-            if (
-                not cls._looks_like_technical_video_id(
-                    text
-                )
-                and re.fullmatch(
-                    r"[0-9a-fA-F-]{20,}",
-                    text,
-                )
-            ):
-                return text
+    @staticmethod
+    def _extract_author_id(
+        data: Dict[str, Any],
+    ) -> Optional[str]:
 
 
-            return None
 
 
-        if not isinstance(
-            value,
+        author = data.get(
+            "author"
+        )
+
+
+
+
+        if isinstance(
+            author,
             dict,
         ):
-            return None
 
 
-        for key in JSON_VIDEO_ID_KEYS:
 
 
-            candidate = value.get(
-                key
+            value = (
+                author.get("id")
+                or author.get("user_id")
             )
 
 
-            if isinstance(
-                candidate,
-                dict,
-            ):
 
 
-                nested = cls._extract_video_id(
-                    candidate
-                )
-
-
-                if nested:
-                    return nested
-
-
-            else:
-
-
-                nested = cls._extract_video_id(
-                    candidate
-                )
-
-
-                if nested:
-                    return nested
-
-
-        for key in (
-            "url",
-            "link",
-            "href",
-            "canonical_url",
-        ):
-
-
-            candidate = value.get(
-                key
+            return (
+                str(value)
+                if value is not None
+                else None
             )
 
 
-            if isinstance(
-                candidate,
-                str,
-            ):
-
-
-                nested = (
-                    cls._extract_video_id_from_url(
-                        candidate
-                    )
-                )
-
-
-                if nested:
-                    return nested
 
 
         return None
 
 
-    @classmethod
-    def _extract_name(
-        cls,
-        value: Dict[str, Any],
-    ) -> str:
 
 
-        for key in TV_NAME_KEYS:
-
-
-            candidate = value.get(
-                key
-            )
-
-
-            if candidate is None:
-                continue
-
-
-            if isinstance(
-                candidate,
-                dict,
-            ):
-
-
-                candidate = (
-                    candidate.get("title")
-                    or candidate.get("name")
-                )
-
-
-            text = cls._clean_text(
-                candidate
-            )
-
-
-            if text:
-                return text
-
-
-        return ""
-
-
-    @classmethod
+    @staticmethod
     def _extract_category(
-        cls,
-        value: Dict[str, Any],
-    ) -> str:
+        data: Dict[str, Any],
+    ) -> Optional[str]:
 
 
-        for key in CATEGORY_KEYS:
 
 
-            candidate = value.get(
-                key
-            )
-
-
-            if isinstance(
-                candidate,
-                dict,
-            ):
-
-
-                candidate = (
-                    candidate.get("name")
-                    or candidate.get("title")
-                )
-
-
-            text = cls._clean_text(
-                candidate
-            )
-
-
-            if text:
-                return text
-
-
-        return ""
-
-
-    @classmethod
-    def _extract_shelf(
-        cls,
-        value: Dict[str, Any],
-    ) -> str:
-
-
-        for key in SHELF_KEYS:
-
-
-            candidate = value.get(
-                key
-            )
-
-
-            if isinstance(
-                candidate,
-                dict,
-            ):
-
-
-                candidate = (
-                    candidate.get("name")
-                    or candidate.get("title")
-                )
-
-
-            text = cls._clean_text(
-                candidate
-            )
-
-
-            if text:
-                return text
-
-
-        return ""
-
-
-    @classmethod
-    def _is_live_card(
-        cls,
-        value: Dict[str, Any],
-    ) -> bool:
-
-
-        if not isinstance(
-            value,
-            dict,
-        ):
-            return False
-
-
-        text_parts = []
-
-
-        for key in (
-            "title",
-            "name",
-            "description",
-            "type",
-            "content_type",
-            "kind",
-            "url",
-        ):
-
-
-            candidate = value.get(
-                key
-            )
-
-
-            if candidate is not None:
-                text_parts.append(
-                    str(candidate)
-                )
-
-
-        text = " ".join(
-            text_parts
-        ).lower()
-
-
-        live_tokens = (
-            "live",
-            "эфир",
-            "телеканал",
-            "телеканалы",
-            "tv",
-            "channel",
-            "broadcast",
-            "online",
+        category = data.get(
+            "category"
         )
 
 
-        return any(
-            token in text
-            for token in live_tokens
-        )
-
-
-    @classmethod
-    def _card_from_object(
-        cls,
-        value: Dict[str, Any],
-        category: str = "",
-        shelf: str = "",
-        source: str = "",
-    ) -> Optional[TVCard]:
-
-
-        if not isinstance(
-            value,
-            dict,
-        ):
-            return None
-
-
-        video_id = cls._extract_video_id(
-            value
-        )
-
-
-        if not video_id:
-            return None
-
-
-        name = cls._extract_name(
-            value
-        )
-
-
-        if not name:
-            name = video_id
-
-
-        card_category = (
-            cls._extract_category(
-                value
-            )
-            or category
-        )
-
-
-        card_shelf = (
-            cls._extract_shelf(
-                value
-            )
-            or shelf
-        )
-
-
-        url = ""
-
-
-        for key in (
-            "url",
-            "link",
-            "href",
-            "canonical_url",
-        ):
-
-
-            candidate = value.get(
-                key
-            )
-
-
-            if candidate:
-                url = str(
-                    candidate
-                )
-                break
-
-
-        if not cls._is_live_card(
-            value
-        ):
-
-
-            if not any(
-                marker in url.lower()
-                for marker in LIVE_PATH_MARKERS
-            ):
-
-
-                return None
-
-
-        return TVCard(
-            name=name,
-            video_id=video_id,
-            category=card_category,
-            url=url,
-            source=source,
-            shelf=card_shelf,
-            marker="",
-            raw=value,
-        )
-
-
-    @classmethod
-    def _walk_json_for_cards(
-        cls,
-        value: Any,
-        category: str = "",
-        shelf: str = "",
-        source: str = "",
-    ) -> List[TVCard]:
-
-
-        result: List[TVCard] = []
 
 
         if isinstance(
-            value,
+            category,
             dict,
         ):
 
 
-            current_category = (
-                cls._extract_category(
-                    value
-                )
-                or category
+
+
+            return (
+                category.get("name")
+                or category.get("title")
             )
 
 
-            current_shelf = (
-                cls._extract_shelf(
-                    value
-                )
-                or shelf
-            )
 
 
-            card = cls._card_from_object(
-                value,
-                category=current_category,
-                shelf=current_shelf,
-                source=source,
-            )
-
-
-            if card:
-                result.append(
-                    card
-                )
-
-
-            for child in value.values():
-
-
-                result.extend(
-                    cls._walk_json_for_cards(
-                        child,
-                        category=current_category,
-                        shelf=current_shelf,
-                        source=source,
-                    )
-                )
-
-
-        elif isinstance(
-            value,
-            list,
+        if isinstance(
+            category,
+            str,
         ):
 
 
-            for child in value:
 
 
-                result.extend(
-                    cls._walk_json_for_cards(
-                        child,
-                        category=category,
-                        shelf=shelf,
-                        source=source,
-                    )
-                )
+            return category
 
 
-        return result
 
 
-    def fetch_discovery_source(
-        self,
-        url: str,
-    ) -> Tuple[str, Optional[Dict[str, Any]]]:
+        return None
 
 
-        response = self._request(
-            "GET",
-            url,
-            "tv_discovery",
-        )
-
-
-        text = response.text
-
-
-        data = None
-
-
-        try:
-            parsed = response.json()
-
-
-            if isinstance(
-                parsed,
-                dict,
-            ):
-                data = parsed
-
-
-        except Exception:
-            data = None
-
-
-        return text, data
-
-
-    def discover_from_url(
-        self,
-        url: str,
-        category: str = "",
-        shelf: str = "",
-        source: str = "",
-    ) -> List[TVCard]:
-
-
-        result: List[TVCard] = []
-
-
-        try:
-
-
-            text, data = (
-                self.fetch_discovery_source(
-                    url
-                )
-            )
-
-
-            if data is not None:
-
-
-                result.extend(
-                    self._walk_json_for_cards(
-                        data,
-                        category=category,
-                        shelf=shelf,
-                        source=source,
-                    )
-                )
-
-
-            result.extend(
-                self._parse_tv_page(
-                    text,
-                    category=category,
-                    shelf=shelf,
-                    source=source,
-                )
-            )
-
-
-        except Exception as exc:
-
-
-            logging.warning(
-                "TV discovery failed: %s: %s",
-                url,
-                exc,
-            )
-
-
-        return result
-
-
-    # ========================================================
-    # HTML TV PARSER
-    # ========================================================
-
-
-    @classmethod
-    def _parse_tv_page(
-        cls,
-        text: str,
-        category: str = "",
-        shelf: str = "",
-        source: str = "",
-    ) -> List[TVCard]:
-
-
-        result: List[TVCard] = []
-
-
-        if not text:
-            return result
-
-
-        decoded = html.unescape(
-            text
-        )
-
-
-        # ----------------------------------------------------
-        # Direct Rutube video URLs.
-        # ----------------------------------------------------
-
-
-        seen_positions = set()
-
-
-        for match in re.finditer(
-            r'https?://rutube\.ru/video/[0-9a-fA-F-]{20,}/?',
-            decoded,
-            re.IGNORECASE,
-        ):
-
-
-            url = match.group(0)
-
-
-            if match.start() in seen_positions:
-                continue
-
-
-            seen_positions.add(
-                match.start()
-            )
-
-
-            video_id = (
-                cls._extract_video_id_from_url(
-                    url
-                )
-            )
-
-
-            if not video_id:
-                continue
-
-
-            start = max(
-                0,
-                match.start() - 700,
-            )
-
-
-            end = min(
-                len(decoded),
-                match.end() + 700,
-            )
-
-
-            context = decoded[
-                start:end
-            ]
-
-
-            name = ""
-
-
-            title_match = re.search(
-                r'"(?:title|name)"\s*:\s*"([^"]+)"',
-                context,
-                re.IGNORECASE,
-            )
-
-
-            if title_match:
-
-
-                name = cls._clean_text(
-                    title_match.group(1)
-                )
-
-
-            if not name:
-
-
-                heading_match = re.search(
-                    r"<(?:h[1-6]|title)[^>]*>"
-                    r"\s*(.*?)\s*"
-                    r"</(?:h[1-6]|title)>",
-                    context,
-                    re.IGNORECASE
-                    | re.DOTALL,
-                )
-
-
-                if heading_match:
-
-
-                    name = cls._clean_text(
-                        re.sub(
-                            r"<[^>]+>",
-                            " ",
-                            heading_match.group(1),
-                        )
-                    )
-
-
-            if not name:
-                name = video_id
-
-
-            result.append(
-                TVCard(
-                    name=name,
-                    video_id=video_id,
-                    category=category,
-                    url=url,
-                    source=source,
-                    shelf=shelf,
-                    marker="",
-                    raw={
-                        "url":
-                            url,
-                        "context":
-                            context,
-                    },
-                )
-            )
-
-
-        # ----------------------------------------------------
-        # JSON embedded objects.
-        # ----------------------------------------------------
-
-
-        for match in re.finditer(
-            r'\{[^{}]{0,10000}"(?:video_id|videoId)"'
-            r'[^{}]{0,10000}\}',
-            decoded,
-            re.IGNORECASE,
-        ):
-
-
-            raw_object = match.group(0)
-
-
-            try:
-
-
-                obj = json.loads(
-                    raw_object
-                )
-
-
-            except Exception:
-                continue
-
-
-            if not isinstance(
-                obj,
-                dict,
-            ):
-                continue
-
-
-            card = cls._card_from_object(
-                obj,
-                category=category,
-                shelf=shelf,
-                source=source,
-            )
-
-
-            if card:
-                result.append(
-                    card
-                )
-
-
-        return result
-
-
-    # ========================================================
-    # CATEGORY DISCOVERY
-    # ========================================================
 
 
     @staticmethod
-    def _extract_category_urls(
-        text: str,
-    ) -> List[Tuple[str, str]]:
+    def _sanitize_visitor(
+        data: Dict[str, Any],
+    ) -> Dict[str, Any]:
 
 
-        result = []
 
 
-        if not text:
-            return result
-
-
-        decoded = html.unescape(
-            text
-        )
-
-
-        pattern = re.compile(
-            r'href\s*=\s*["\']'
-            r'([^"\']*'
-            r'/feeds/live/tvprogramm/'
-            r'[^"\']*)'
-            r'["\']',
-            re.IGNORECASE,
-        )
-
-
-        seen = set()
-
-
-        for match in pattern.finditer(
-            decoded
-        ):
-
-
-            raw_url = match.group(1)
-
-
-            url = urljoin(
-                DISCOVERY_SOURCE_URL,
-                raw_url,
-            )
-
-
-            parsed = urlparse(
-                url
-            )
-
-
-            normalized = urlunparse((
-                parsed.scheme,
-                parsed.netloc,
-                parsed.path,
-                "",
-                "",
-                "",
-            ))
-
-
-            if normalized in seen:
-                continue
-
-
-            seen.add(
-                normalized
-            )
-
-
-            parts = [
-                part
-                for part in parsed.path.split("/")
-                if part
-            ]
-
-
-            category = (
-                parts[-1]
-                if parts
-                else "category"
-            )
-
-
-            category = category.replace(
-                "-",
-                " ",
-            ).strip()
-
-
-            result.append(
-                (
-                    category,
-                    normalized,
-                )
-            )
-
-
-        return result
-
-
-    def discover_categories(
-        self,
-    ) -> List[Tuple[str, str]]:
-
-
-        categories = []
-
-
-        try:
-
-
-            text, _ = (
-                self.fetch_discovery_source(
-                    DISCOVERY_SOURCE_URL
-                )
-            )
-
-
-            categories.extend(
-                self._extract_category_urls(
-                    text
-                )
-            )
-
-
-        except Exception as exc:
-
-
-            logging.warning(
-                "Category discovery failed: %s",
-                exc,
-            )
-
-
-        existing = {
-            url
-            for _, url in categories
+        sensitive = {
+            "club_params_encrypted",
+            "token",
+            "access_token",
+            "refresh_token",
+            "password",
         }
 
 
-        for name, url in (
-            FALLBACK_CATEGORY_URLS.items()
+
+
+        result = {}
+
+
+
+
+        for key, value in (
+            data.items()
         ):
 
 
-            if url not in existing:
 
 
-                categories.append(
-                    (
-                        name,
-                        url,
+            if key.lower() in (
+                sensitive
+            ):
+                continue
+
+
+
+
+            result[key] = value
+
+
+
+
+        return result
+
+
+
+
+    def _sanitize_balancer(
+        self,
+        data: Dict[str, Any],
+    ) -> Dict[str, Any]:
+
+
+
+
+        result = {}
+
+
+
+
+        for key, value in (
+            data.items()
+        ):
+
+
+
+
+            if key == "m3u8_url":
+
+
+
+
+                result[key] = (
+                    self._safe_url(
+                        str(value)
                     )
                 )
 
 
-        return categories
 
 
-    # ========================================================
-    # PAGINATION
-    # ========================================================
+            elif key == "raw":
 
 
-    @staticmethod
-    def _page_url(
-        base_url: str,
-        page: int,
-    ) -> str:
 
 
-        parsed = urlparse(
-            base_url
-        )
+                result[key] = value
 
 
-        query = parse_qs(
-            parsed.query,
-            keep_blank_values=True,
-        )
-
-
-        query["page"] = [
-            str(page)
-        ]
-
-
-        return urlunparse((
-            parsed.scheme,
-            parsed.netloc,
-            parsed.path,
-            parsed.params,
-            urlencode(
-                query,
-                doseq=True,
-            ),
-            parsed.fragment,
-        ))
-
-
-    def scrape_category(
-        self,
-        category: str,
-        url: str,
-        max_pages: int = DEFAULT_MAX_PAGES,
-        max_empty_pages: int = DEFAULT_MAX_EMPTY_PAGES,
-    ) -> List[TVCard]:
-
-
-        all_cards: List[TVCard] = []
-
-
-        empty_pages = 0
-
-
-        for page in range(
-            1,
-            max_pages + 1,
-        ):
-
-
-            page_url = (
-                self._page_url(
-                    url,
-                    page,
-                )
-            )
-
-
-            try:
-
-
-                cards = self.discover_from_url(
-                    page_url,
-                    category=category,
-                    shelf=category,
-                    source="rutube_category",
-                )
-
-
-            except Exception as exc:
-
-
-                logging.warning(
-                    "Category page failed "
-                    "category=%s page=%s: %s",
-                    category,
-                    page,
-                    exc,
-                )
-
-
-                cards = []
-
-
-            if not cards:
-
-
-                empty_pages += 1
-
-
-                if (
-                    empty_pages
-                    >= max_empty_pages
-                ):
-                    break
 
 
             else:
 
 
-                empty_pages = 0
 
 
-                all_cards.extend(
-                    cards
-                )
+                result[key] = value
 
 
-        return all_cards
 
 
-    # ========================================================
-    # FULL CATALOG DISCOVERY
-    # ========================================================
+        return result
 
 
-    def scrape_tv_catalog(
-        self,
-        max_pages: int = DEFAULT_MAX_PAGES,
-        max_empty_pages: int = DEFAULT_MAX_EMPTY_PAGES,
-    ) -> List[TVCard]:
 
 
-        categories = (
-            self.discover_categories()
+    @staticmethod
+    def _safe_filename_part(
+        value: str,
+    ) -> str:
+
+
+
+
+        value = re.sub(
+            r"[^0-9A-Za-zА-Яа-яЁё_-]+",
+            "_",
+            str(value),
         )
 
 
-        logging.info(
-            "TV categories discovered: %d",
-            len(categories),
+
+
+        value = value.strip(
+            "_"
         )
 
 
-        all_cards: List[TVCard] = []
 
 
-        for category, url in categories:
-
-
-            logging.info(
-                "TV CATEGORY: %s -> %s",
-                category,
-                url,
-            )
-
-
-            cards = self.scrape_category(
-                category=category,
-                url=url,
-                max_pages=max_pages,
-                max_empty_pages=max_empty_pages,
-            )
-
-
-            all_cards.extend(
-                cards
-            )
-
-
-            logging.info(
-                "TV CATEGORY RESULT: "
-                "%s cards=%d",
-                category,
-                len(cards),
-            )
-
-
-        # Additional official TV programme feed.
-        try:
-
-
-            program_cards = (
-                self.discover_from_url(
-                    TV_PROGRAM_SOURCE_URL,
-                    category="TV Programme",
-                    shelf="TV Programme",
-                    source="rutube_tv_program",
-                )
-            )
-
-
-            all_cards.extend(
-                program_cards
-            )
-
-
-            logging.info(
-                "TV PROGRAM RESULT: cards=%d",
-                len(program_cards),
-            )
-
-
-        except Exception as exc:
-
-
-            logging.warning(
-                "TV programme discovery failed: %s",
-                exc,
-            )
-
-
-        return all_cards
-
-
-# ============================================================
-# MAIN SCRAPER COMPOSITION
-# ============================================================
-
-
-class RutubeFullScrapper(
-    TVDiscoveryMixin,
-    RutubeScrapper,
-):
-
-
-    pass
-
-
-# ============================================================
-# OUTPUT HELPERS
-# ============================================================
-
-
-def utc_now_iso() -> str:
-
-
-    return (
-        datetime.now(
-            timezone.utc
+        return (
+            value[:80]
+            or
+            "category"
         )
-        .isoformat()
-    )
 
 
-def ensure_output_dir() -> Path:
 
 
-    path = Path(
-        OUTPUT_DIR
-    )
 
 
-    path.mkdir(
-        parents=True,
-        exist_ok=True,
-    )
 
 
-    return path
+# ============================================================
+# FILE OUTPUT
+# ============================================================
+
+
 
 
 def write_json(
     path: Path,
-    value: Any,
-) -> None:
+    data: Dict[str, Any],
+):
+
+
 
 
     path.write_text(
         json.dumps(
-            value,
+            data,
             ensure_ascii=False,
             indent=2,
         ),
@@ -3170,34 +6783,18 @@ def write_json(
     )
 
 
-def write_jsonl(
-    path: Path,
-    rows: List[Dict[str, Any]],
-) -> None:
 
 
-    with path.open(
-        "w",
-        encoding="utf-8",
-    ) as fh:
 
 
-        for row in rows:
-
-
-            fh.write(
-                json.dumps(
-                    row,
-                    ensure_ascii=False,
-                )
-                + "\n"
-            )
 
 
 def write_text(
     path: Path,
     text: str,
-) -> None:
+):
+
+
 
 
     path.write_text(
@@ -3206,487 +6803,99 @@ def write_text(
     )
 
 
-# ============================================================
-# M3U
-# ============================================================
 
 
-def make_m3u(
-    rows: List[Dict[str, Any]],
-) -> str:
 
 
-    lines = [
-        "#EXTM3U",
-    ]
 
 
-    for row in rows:
+def write_jsonl(
+    path: Path,
+    report: Dict[str, Any],
+):
 
 
-        name = str(
-            row.get(
-                "name",
-                "",
-            )
-        )
 
 
-        group = str(
-            row.get(
-                "group",
-                RUTUBE_GROUP,
-            )
-        )
-
-
-        epg_id = str(
-            row.get(
-                "tvg_id",
-                "",
-            )
-        )
-
-
-        logo = str(
-            row.get(
-                "logo",
-                "",
-            )
-        )
-
-
-        url = str(
-            row.get(
-                "url",
-                "",
-            )
-        )
-
-
-        attributes = [
-            f'tvg-id="{epg_id}"'
-            if epg_id
-            else "",
-            f'tvg-name="{name}"',
-            f'group-title="{group}"',
-            f'tvg-logo="{logo}"'
-            if logo
-            else "",
-        ]
-
-
-        attributes = [
-            item
-            for item in attributes
-            if item
-        ]
-
-
-        lines.append(
-            "#EXTINF:-1 "
-            + " ".join(
-                attributes
-            )
-            + ","
-            + name
-        )
-
-
-        lines.append(
-            "#EXTVLCOPT:http-referrer=https://rutube.ru/"
-        )
-
-
-        lines.append(
-            "#EXTVLCOPT:http-user-agent="
-            + M3U_USER_AGENT
-        )
-
-
-        lines.append(
-            url
-        )
-
-
-    return "\n".join(
-        lines
-    ) + "\n"
-
-
-# ============================================================
-# STREAM ROW BUILDER
-# ============================================================
-
-
-def stream_to_dict(
-    stream: StreamInfo,
-) -> Dict[str, Any]:
-
-
-    return asdict(
-        stream
+    records = (
+        report["ml"]["records"]
     )
 
 
-def card_to_dict(
-    card: TVCard,
-) -> Dict[str, Any]:
 
 
-    return asdict(
-        card
-    )
+    with path.open(
+        "w",
+        encoding="utf-8",
+    ) as f:
 
 
-# ============================================================
-# SINGLE VIDEO FLOW
-# ============================================================
 
 
-def process_single_video(
-    scraper: RutubeFullScrapper,
-    video_id: str,
-    test_streams: bool = True,
-) -> Dict[str, Any]:
+        for record in records:
 
 
-    started = time.perf_counter()
 
 
-    video = scraper.video(
-        video_id
-    )
-
-
-    award_data = None
-    balancer = None
-    master_streams = []
-
-
-    try:
-
-
-        award_data = scraper.award(
-            video.internal_id
-        )
-
-
-        balancer = scraper.get_balancer(
-            video.internal_id,
-            award_data["award"],
-        )
-
-
-        master_url = (
-            balancer["m3u8_url"]
-        )
-
-
-        master_text = scraper.get_m3u8(
-            master_url
-        )
-
-
-        master_streams = (
-            scraper.parse_m3u8(
-                master_text
-            )
-        )
-
-
-        if test_streams:
-
-
-            tested = []
-
-
-            for stream in master_streams:
-
-
-                tested.append(
-                    scraper.test_stream(
-                        stream
-                    )
-                )
-
-
-            master_streams = tested
-
-
-    except Exception as exc:
-
-
-        logging.warning(
-            "Single video HLS flow failed: %s",
-            exc,
-        )
-
-
-    elapsed = (
-        time.perf_counter()
-        - started
-    ) * 1000
-
-
-    return {
-        "video":
-            asdict(video),
-
-
-        "award":
-            award_data,
-
-
-        "balancer":
-            balancer,
-
-
-        "streams":
-            [
-                stream_to_dict(
-                    stream
-                )
-                for stream
-                in master_streams
-            ],
-
-
-        "duration_ms":
-            round(
-                elapsed,
-                3,
-            ),
-    }
-
-
-# ============================================================
-# TV CARD SERIALIZATION
-# ============================================================
-
-
-def tv_card_rows(
-    cards: List[TVCard],
-) -> List[Dict[str, Any]]:
-
-
-    rows = []
-
-
-    for index, card in enumerate(
-        cards,
-        start=1,
-    ):
-
-
-        rows.append({
-            "index":
-                index,
-
-
-            "name":
-                card.name,
-
-
-            "video_id":
-                card.video_id,
-
-
-            "category":
-                card.category,
-
-
-            "shelf":
-                card.shelf,
-
-
-            "url":
-                card.url,
-
-
-            "source":
-                card.source,
-
-
-            "marker":
-                card.marker,
-        })
-
-
-    return rows
-
-
-# ============================================================
-# TV STREAM RESOLUTION
-# ============================================================
-
-
-def resolve_tv_streams(
-    scraper: RutubeFullScrapper,
-    cards: List[TVCard],
-) -> List[Dict[str, Any]]:
-
-
-    result = []
-
-
-    total = len(
-        cards
-    )
-
-
-    for index, card in enumerate(
-        cards,
-        start=1,
-    ):
-
-
-        logging.info(
-            "TV HLS %d/%d: %s [%s]",
-            index,
-            total,
-            card.name,
-            card.video_id,
-        )
-
-
-        try:
-
-
-            streams = (
-                scraper.get_live_streams(
-                    card.video_id
+            f.write(
+                json.dumps(
+                    record,
+                    ensure_ascii=False,
                 )
             )
 
 
-        except Exception as exc:
 
 
-            logging.warning(
-                "TV HLS failed "
-                "name=%s video_id=%s: %s",
-                card.name,
-                card.video_id,
-                exc,
+            f.write("\n")
+
+
+
+
+
+
+
+
+def write_tv_jsonl(
+    path: Path,
+    report: Dict[str, Any],
+):
+
+
+
+
+    with path.open(
+        "w",
+        encoding="utf-8",
+    ) as f:
+
+
+
+
+        for record in report[
+            "channels"
+        ]:
+
+
+
+
+            f.write(
+                json.dumps(
+                    record,
+                    ensure_ascii=False,
+                )
             )
 
 
-            streams = []
 
 
-        for stream_index, url in enumerate(
-            streams
-        ):
+            f.write("\n")
 
 
-            result.append({
-                "name":
-                    card.name,
 
 
-                "video_id":
-                    card.video_id,
 
 
-                "category":
-                    card.category,
-
-
-                "shelf":
-                    card.shelf,
-
-
-                "source":
-                    card.source,
-
-
-                "stream_index":
-                    stream_index,
-
-
-                "url":
-                    url,
-
-
-                "group":
-                    RUTUBE_GROUP,
-
-
-                "tvg_id":
-                    "",
-
-
-                "logo":
-                    "",
-            })
-
-
-    return result
-
-
-# ============================================================
-# REPORT
-# ============================================================
-
-
-def build_report(
-    scraper: RutubeFullScrapper,
-    cards: List[TVCard],
-    streams: List[Dict[str, Any]],
-    started_at: str,
-    finished_at: str,
-) -> Dict[str, Any]:
-
-
-    return {
-        "version":
-            VERSION,
-
-
-        "started_at":
-            started_at,
-
-
-        "finished_at":
-            finished_at,
-
-
-        "tv_cards":
-            len(cards),
-
-
-        "streams":
-            len(streams),
-
-
-        "requests":
-            len(
-                scraper.request_stats
-            ),
-
-
-        "request_stats":
-            [
-                asdict(
-                    stat
-                )
-                for stat
-                in scraper.request_stats
-            ],
-
-
-        "deduplication":
-            False,
-
-
-        "deduplication_method":
-            "none",
-
-
-        "stream_source":
-            "live_streams.hls",
-    }
 
 
 # ============================================================
@@ -3694,16 +6903,29 @@ def build_report(
 # ============================================================
 
 
-def configure_logging() -> None:
 
 
-    output_dir = ensure_output_dir()
+def setup_logging(
+    output_dir: Path,
+):
 
 
-    log_path = (
-        output_dir
-        / "rutube_tv.log"
+
+
+    output_dir.mkdir(
+        parents=True,
+        exist_ok=True,
     )
+
+
+
+
+    log_file = (
+        output_dir
+        / "scraper.log"
+    )
+
+
 
 
     logging.basicConfig(
@@ -3718,7 +6940,7 @@ def configure_logging() -> None:
                 sys.stdout
             ),
             logging.FileHandler(
-                log_path,
+                log_file,
                 encoding="utf-8",
             ),
         ],
@@ -3726,71 +6948,1186 @@ def configure_logging() -> None:
     )
 
 
+
+
+
+
+
+
 # ============================================================
-# ENVIRONMENT
+# TV OUTPUT
 # ============================================================
 
 
-def env_int(
-    name: str,
-    default: int,
-) -> int:
 
 
-    value = os.getenv(
-        name
+def write_tv_outputs(
+    output_dir: Path,
+    report: Dict[str, Any],
+    scraper: RutubeScrapper,
+):
+
+
+
+
+    output_dir.mkdir(
+        parents=True,
+        exist_ok=True,
     )
 
 
-    if value is None:
-        return default
+
+
+    # --------------------------------------------------------
+    # JSON
+    # --------------------------------------------------------
+
+
+
+
+    write_json(
+        output_dir / JSON_FILENAME,
+        report,
+    )
+
+
+
+
+    # --------------------------------------------------------
+    # M3U
+    # --------------------------------------------------------
+
+
+
+
+    m3u_text = (
+        scraper.make_tv_m3u(
+            report[
+                "channels"
+            ]
+        )
+    )
+
+
+
+
+    write_text(
+        output_dir / M3U_FILENAME,
+        m3u_text,
+    )
+
+
+
+
+    # --------------------------------------------------------
+    # JSONL
+    # --------------------------------------------------------
+
+
+
+
+    write_tv_jsonl(
+        output_dir / JSONL_FILENAME,
+        report,
+    )
+
+
+
+
+    # --------------------------------------------------------
+    # TXT
+    # --------------------------------------------------------
+
+
+
+
+    write_text(
+        output_dir / TXT_FILENAME,
+        scraper.make_tv_txt(
+            report
+        ),
+    )
+
+
+
+
+    # --------------------------------------------------------
+    # DISCOVERY DEBUG HTML
+    #
+    # Не обязателен для работы.
+    # Оставляем небольшой служебный файл.
+    # --------------------------------------------------------
+
+
+
+
+    logging.info(
+        "JSON: %s",
+        output_dir / JSON_FILENAME,
+    )
+
+
+
+
+    logging.info(
+        "M3U: %s",
+        output_dir / M3U_FILENAME,
+    )
+
+
+
+
+    logging.info(
+        "JSONL: %s",
+        output_dir / JSONL_FILENAME,
+    )
+
+
+
+
+    logging.info(
+        "TXT: %s",
+        output_dir / TXT_FILENAME,
+    )
+
+
+
+
+
+
+
+
+# ============================================================
+# LEGACY CLI
+# ============================================================
+
+
+
+
+def build_parser():
+
+
+
+
+    parser = argparse.ArgumentParser(
+        description=(
+            "Rutube Full Scraper + "
+            "Autonomous TV Discovery"
+        )
+    )
+
+
+
+
+    parser.add_argument(
+        "video_id",
+        nargs="?",
+        help=(
+            "Optional Rutube video ID. "
+            "If omitted, autonomous TV Discovery "
+            "is started."
+        ),
+    )
+
+
+
+
+    parser.add_argument(
+        "--phone",
+        default=os.getenv(
+            "RUTUBE_PHONE"
+        ),
+        help=(
+            "Rutube phone. "
+            "Can also be RUTUBE_PHONE"
+        ),
+    )
+
+
+
+
+    parser.add_argument(
+        "--password",
+        default=os.getenv(
+            "RUTUBE_PASSWORD"
+        ),
+        help=(
+            "Rutube password. "
+            "Can also be RUTUBE_PASSWORD"
+        ),
+    )
+
+
+
+
+    parser.add_argument(
+        "--output",
+        default=os.getenv(
+            "RUTUBE_OUTPUT",
+            OUTPUT_DIR,
+        ),
+        help=(
+            "Output directory"
+        ),
+    )
+
+
+
+
+    parser.add_argument(
+        "--no-test",
+        action="store_true",
+        help=(
+            "Do not test individual streams "
+            "in legacy video mode"
+        ),
+    )
+
+
+
+
+    parser.add_argument(
+        "--dead-streams",
+        action="store_true",
+        help=(
+            "Include dead streams in legacy M3U"
+        ),
+    )
+
+
+
+
+    parser.add_argument(
+        "--timeout",
+        type=float,
+        default=float(
+            os.getenv(
+                "RUTUBE_TIMEOUT",
+                "30",
+            )
+        ),
+        help=(
+            "HTTP read timeout"
+        ),
+    )
+
+
+
+
+    parser.add_argument(
+        "--max-pages",
+        type=int,
+        default=int(
+            os.getenv(
+                "RUTUBE_MAX_PAGES",
+                str(
+                    DEFAULT_MAX_PAGES
+                ),
+            )
+        ),
+        help=(
+            "Maximum pages per TV category"
+        ),
+    )
+
+
+
+
+    parser.add_argument(
+        "--max-empty-pages",
+        type=int,
+        default=int(
+            os.getenv(
+                "RUTUBE_MAX_EMPTY_PAGES",
+                str(
+                    DEFAULT_MAX_EMPTY_PAGES
+                ),
+            )
+        ),
+        help=(
+            "Maximum consecutive empty "
+            "pages per category"
+        ),
+    )
+
+
+
+
+    parser.add_argument(
+        "--insecure",
+        action="store_true",
+        help=(
+            "Disable SSL verification"
+        ),
+    )
+
+
+
+
+    return parser
+
+
+
+
+
+
+
+
+# ============================================================
+# AUTONOMOUS TV MAIN
+# ============================================================
+
+
+
+
+def autonomous_tv_main(
+    args,
+):
+
+
+
+
+    output_dir = Path(
+        args.output
+    )
+
+
+
+
+    setup_logging(
+        output_dir
+    )
+
+
+
+
+    logging.info(
+        "=" * 80
+    )
+
+
+
+
+    logging.info(
+        "RUTUBE TV AUTONOMOUS DISCOVERY"
+    )
+
+
+
+
+    logging.info(
+        "VERSION: %s",
+        VERSION,
+    )
+
+
+
+
+    logging.info(
+        "SOURCE: %s",
+        DISCOVERY_SOURCE_URL,
+    )
+
+
+
+
+    logging.info(
+        "TV PROGRAM SOURCE: %s",
+        TV_PROGRAM_SOURCE_URL,
+    )
+
+
+
+
+    logging.info(
+        "TV TARGET: %d UNIQUE CHANNELS",
+        TV_TARGET_COUNT,
+    )
+
+    logging.info(
+        "DISCOVERY: WORKFLOW ARTIFACTS -> *Телеканалы* -> YOUTUBE -> RUTUBE"
+    )
+
+
+
+
+    logging.info(
+        "=" * 80
+    )
+
+
+
+
+    scraper = RutubeScrapper(
+        timeout=(
+            10,
+            args.timeout,
+        ),
+        verify_ssl=(
+            not args.insecure
+        ),
+    )
+
+
 
 
     try:
-        return int(
-            value
+
+
+
+
+        report = (
+            scraper.scrape_tv_catalog(
+                source_url=(
+                    DISCOVERY_SOURCE_URL
+                ),
+                max_pages=(
+                    max(
+                        1,
+                        args.max_pages
+                    )
+                ),
+                max_empty_pages=(
+                    max(
+                        1,
+                        args.max_empty_pages
+                    )
+                ),
+                output_dir=output_dir,
+                target_count=TV_TARGET_COUNT,
+            )
         )
-    except Exception:
-        return default
 
 
-def env_bool(
-    name: str,
-    default: bool,
-) -> bool:
 
 
-    value = os.getenv(
-        name
+        write_tv_outputs(
+            output_dir,
+            report,
+            scraper,
+        )
+
+
+
+
+        stats = report[
+            "statistics"
+        ]
+
+
+
+
+        print()
+        print(
+            "=" * 80
+        )
+
+
+
+
+        print(
+            "RUTUBE TV DISCOVERY FINISHED"
+        )
+
+
+
+
+        print(
+            "=" * 80
+        )
+
+
+
+
+        print(
+            "TV target        : "
+            f"{TV_TARGET_COUNT}"
+        )
+
+        print(
+            "Unique TV cards  : "
+            f"{stats['unique_tv_channels']}"
+        )
+
+
+
+
+        print(
+            "Records found    : "
+            f"{stats['discovered_records']}"
+        )
+
+
+
+
+        print(
+            "Records processed: "
+            f"{stats['processed_records']}"
+        )
+
+
+
+
+        print(
+            "With HLS         : "
+            f"{stats['with_hls']}"
+        )
+
+
+
+
+        print(
+            "Without HLS      : "
+            f"{stats['without_hls']}"
+        )
+
+
+
+
+        print(
+            "Errors           : "
+            f"{stats['errors']}"
+        )
+
+
+
+
+        print(
+            "HLS URLs         : "
+            f"{stats['total_hls_urls']}"
+        )
+
+
+
+
+        print()
+
+
+
+
+        print(
+            "M3U              : "
+            f"{output_dir / M3U_FILENAME}"
+        )
+
+
+
+
+        print(
+            "JSON             : "
+            f"{output_dir / JSON_FILENAME}"
+        )
+
+
+
+
+        print(
+            "JSONL            : "
+            f"{output_dir / JSONL_FILENAME}"
+        )
+
+
+
+
+        print(
+            "TXT              : "
+            f"{output_dir / TXT_FILENAME}"
+        )
+
+
+
+
+        print(
+            "LOG              : "
+            f"{output_dir / 'scraper.log'}"
+        )
+
+
+
+
+        print(
+            "=" * 80
+        )
+
+
+
+
+        return 0
+
+
+
+
+    except KeyboardInterrupt:
+
+
+
+
+        logging.error(
+            "Interrupted by user"
+        )
+
+
+
+
+        return 130
+
+
+
+
+    except Exception as exc:
+
+
+
+
+        logging.exception(
+            "Autonomous discovery failed: %s",
+            exc,
+        )
+
+
+
+
+        return 1
+
+
+
+
+
+
+
+
+# ============================================================
+# LEGACY SINGLE VIDEO MAIN
+# ============================================================
+
+
+
+
+def legacy_video_main(
+    args,
+):
+
+
+
+
+    if not args.phone:
+
+
+
+
+        print(
+            "ERROR: Rutube phone is required "
+            "for legacy single-video mode.",
+            file=sys.stderr,
+        )
+
+
+
+
+        return 2
+
+
+
+
+    if not args.password:
+
+
+
+
+        print(
+            "ERROR: Rutube password is required "
+            "for legacy single-video mode.",
+            file=sys.stderr,
+        )
+
+
+
+
+        return 2
+
+
+
+
+    output_dir = Path(
+        args.output
     )
 
 
-    if value is None:
-        return default
 
 
-    value = value.strip().lower()
+    setup_logging(
+        output_dir
+    )
 
 
-    if value in (
-        "1",
-        "true",
-        "yes",
-        "on",
-    ):
-        return True
 
 
-    if value in (
-        "0",
-        "false",
-        "no",
-        "off",
-    ):
-        return False
+    logging.info(
+        "Starting Rutube legacy scraper %s",
+        VERSION,
+    )
 
 
-    return default
+
+
+    scraper = RutubeScrapper(
+        timeout=(
+            10,
+            args.timeout,
+        ),
+        verify_ssl=(
+            not args.insecure
+        ),
+    )
+
+
+
+
+    try:
+
+
+
+
+        report = scraper.scrape(
+            video_id=args.video_id,
+            phone=args.phone,
+            password=args.password,
+            test_streams=(
+                not args.no_test
+            ),
+        )
+
+
+
+
+        video = report[
+            "video"
+        ]
+
+
+
+
+        internal_id = (
+            video[
+                "internal_id"
+            ]
+        )
+
+
+
+
+        base_name = (
+            f"rutube_"
+            f"{internal_id}"
+        )
+
+
+
+
+        # ----------------------------------------------------
+        # JSON
+        # ----------------------------------------------------
+
+
+
+
+        json_path = (
+            output_dir
+            / f"{base_name}.json"
+        )
+
+
+
+
+        write_json(
+            json_path,
+            report,
+        )
+
+
+
+
+        # ----------------------------------------------------
+        # TXT
+        # ----------------------------------------------------
+
+
+
+
+        txt_path = (
+            output_dir
+            / f"{base_name}.txt"
+        )
+
+
+
+
+        write_text(
+            txt_path,
+            scraper.make_txt_report(
+                report
+            ),
+        )
+
+
+
+
+        # ----------------------------------------------------
+        # M3U
+        # ----------------------------------------------------
+
+
+
+
+        m3u_path = (
+            output_dir
+            / f"{base_name}.m3u"
+        )
+
+
+
+
+        streams = [
+            StreamInfo(
+                **stream
+            )
+            for stream
+            in report[
+                "streams"
+            ]
+        ]
+
+
+
+
+        m3u_text = (
+            scraper.make_m3u(
+                VideoInfo(
+                    **{
+                        key:
+                            video[key]
+                        for key
+                        in
+                        VideoInfo.__dataclass_fields__
+                        if key in video
+                    }
+                ),
+                streams,
+                only_alive=(
+                    not args.dead_streams
+                ),
+            )
+        )
+
+
+
+
+        write_text(
+            m3u_path,
+            m3u_text,
+        )
+
+
+
+
+        # ----------------------------------------------------
+        # ML JSONL
+        # ----------------------------------------------------
+
+
+
+
+        jsonl_path = (
+            output_dir
+            / f"{base_name}_ml.jsonl"
+        )
+
+
+
+
+        write_jsonl(
+            jsonl_path,
+            report,
+        )
+
+
+
+
+        # ----------------------------------------------------
+        # RAW M3U8
+        # ----------------------------------------------------
+
+
+
+
+        raw_m3u8_path = (
+            output_dir
+            / f"{base_name}_master.m3u8"
+        )
+
+
+
+
+        try:
+
+
+
+
+            raw_url = (
+                report[
+                    "stream_source"
+                ][
+                    "balancer_url"
+                ]
+            )
+
+
+
+
+            # Отчёт содержит безопасный URL,
+            # поэтому повторно получаем master только
+            # при возможности.
+            #
+            # Это не влияет на основной результат.
+            if raw_url:
+
+
+
+
+                raw_text = (
+                    scraper.get_m3u8(
+                        raw_url
+                    )
+                )
+
+
+
+
+                write_text(
+                    raw_m3u8_path,
+                    raw_text,
+                )
+
+
+
+
+        except Exception as exc:
+
+
+
+
+            logging.warning(
+                "RAW M3U8 save failed: %s",
+                exc,
+            )
+
+
+
+
+        # ----------------------------------------------------
+        # SUMMARY
+        # ----------------------------------------------------
+
+
+
+
+        stats = report[
+            "statistics"
+        ]
+
+
+
+
+        print()
+        print(
+            "=" * 70
+        )
+
+
+
+
+        print(
+            "RUTUBE SCRAPER FINISHED"
+        )
+
+
+
+
+        print(
+            "=" * 70
+        )
+
+
+
+
+        print(
+            f"Video ID       : "
+            f"{video['requested_id']}"
+        )
+
+
+
+
+        print(
+            f"Internal ID    : "
+            f"{video['internal_id']}"
+        )
+
+
+
+
+        print(
+            f"Title          : "
+            f"{video.get('title') or ''}"
+        )
+
+
+
+
+        print(
+            f"Streams        : "
+            f"{stats['total_streams']}"
+        )
+
+
+
+
+        print(
+            f"Alive          : "
+            f"{stats['alive_streams']}"
+        )
+
+
+
+
+        print(
+            f"Dead           : "
+            f"{stats['dead_streams']}"
+        )
+
+
+
+
+        print(
+            f"Availability   : "
+            f"{stats['availability_percent']}%"
+        )
+
+
+
+
+        print()
+
+
+
+
+        print(
+            f"JSON           : "
+            f"{json_path}"
+        )
+
+
+
+
+        print(
+            f"TXT            : "
+            f"{txt_path}"
+        )
+
+
+
+
+        print(
+            f"M3U            : "
+            f"{m3u_path}"
+        )
+
+
+
+
+        print(
+            f"ML JSONL       : "
+            f"{jsonl_path}"
+        )
+
+
+
+
+        print(
+            f"RAW M3U8       : "
+            f"{raw_m3u8_path}"
+        )
+
+
+
+
+        print(
+            "=" * 70
+        )
+
+
+
+
+        return 0
+
+
+
+
+    except RutubeScrapperError as exc:
+
+
+
+
+        logging.error(
+            "Rutube error: %s",
+            exc,
+        )
+
+
+
+
+        return 2
+
+
+
+
+    except KeyboardInterrupt:
+
+
+
+
+        logging.error(
+            "Interrupted by user"
+        )
+
+
+
+
+        return 130
+
+
+
+
+    except Exception as exc:
+
+
+
+
+        logging.exception(
+            "Unexpected error: %s",
+            exc,
+        )
+
+
+
+
+        return 1
+
+
+
+
+
+
 
 
 # ============================================================
@@ -3798,332 +8135,67 @@ def env_bool(
 # ============================================================
 
 
-def main() -> int:
 
 
-    configure_logging()
+def main():
 
 
-    parser = argparse.ArgumentParser(
-        description=(
-            "Rutube Full Scraper / "
-            "Autonomous TV Discovery"
-        )
-    )
 
 
-    parser.add_argument(
-        "video_id",
-        nargs="?",
-        default=None,
-    )
+    parser = build_parser()
 
 
-    parser.add_argument(
-        "--timeout",
-        type=int,
-        default=30,
-    )
-
-
-    parser.add_argument(
-        "--no-test",
-        action="store_true",
-    )
-
-
-    parser.add_argument(
-        "--max-pages",
-        type=int,
-        default=env_int(
-            "RUTUBE_MAX_PAGES",
-            DEFAULT_MAX_PAGES,
-        ),
-    )
-
-
-    parser.add_argument(
-        "--max-empty-pages",
-        type=int,
-        default=env_int(
-            "RUTUBE_MAX_EMPTY_PAGES",
-            DEFAULT_MAX_EMPTY_PAGES,
-        ),
-    )
 
 
     args = parser.parse_args()
 
 
-    scraper = RutubeFullScrapper(
-        timeout=(
-            10,
-            args.timeout,
+
+
+    # ========================================================
+    # АВТОНОМНЫЙ РЕЖИМ
+    # ========================================================
+    #
+    # Просто:
+    #
+    #     python m3u_rutube.py
+    #
+    # Никакого video_id.
+    # Никаких обязательных credentials.
+    #
+    # ========================================================
+
+
+
+
+    if not args.video_id:
+
+
+
+
+        return autonomous_tv_main(
+            args
         )
+
+
+
+
+    # ========================================================
+    # LEGACY MODE
+    # ========================================================
+
+
+
+
+    return legacy_video_main(
+        args
     )
 
 
-    output_dir = ensure_output_dir()
 
 
-    started_at = utc_now_iso()
 
 
-    scraper.started_at = (
-        started_at
-    )
-
-
-    # --------------------------------------------------------
-    # SINGLE VIDEO MODE
-    # --------------------------------------------------------
-
-
-    if args.video_id:
-
-
-        logging.info(
-            "MODE: SINGLE VIDEO"
-        )
-
-
-        try:
-
-
-            result = process_single_video(
-                scraper,
-                args.video_id,
-                test_streams=(
-                    not args.no_test
-                ),
-            )
-
-
-            write_json(
-                output_dir
-                / "single_video.json",
-                result,
-            )
-
-
-            logging.info(
-                "Single video completed"
-            )
-
-
-            return 0
-
-
-        except Exception as exc:
-
-
-            logging.exception(
-                "Single video failed: %s",
-                exc,
-            )
-
-
-            return 1
-
-
-    # --------------------------------------------------------
-    # AUTONOMOUS TV MODE
-    # --------------------------------------------------------
-
-
-    logging.info(
-        "MODE: AUTONOMOUS TV DISCOVERY"
-    )
-
-
-    logging.info(
-        "DISCOVERY SOURCE: %s",
-        DISCOVERY_SOURCE_URL,
-    )
-
-
-    try:
-
-
-        cards = (
-            scraper.scrape_tv_catalog(
-                max_pages=args.max_pages,
-                max_empty_pages=(
-                    args.max_empty_pages
-                ),
-            )
-        )
-
-
-        logging.info(
-            "DISCOVERY COMPLETE: cards=%d",
-            len(cards),
-        )
-
-
-        card_rows = tv_card_rows(
-            cards
-        )
-
-
-        write_json(
-            output_dir
-            / JSON_FILENAME,
-            card_rows,
-        )
-
-
-        write_jsonl(
-            output_dir
-            / JSONL_FILENAME,
-            card_rows,
-        )
-
-
-        txt_lines = []
-
-
-        for row in card_rows:
-
-
-            txt_lines.append(
-                (
-                    f"{row['name']}\t"
-                    f"{row['video_id']}\t"
-                    f"{row['category']}\t"
-                    f"{row['url']}"
-                )
-            )
-
-
-        write_text(
-            output_dir
-            / TXT_FILENAME,
-            "\n".join(
-                txt_lines
-            ) + (
-                "\n"
-                if txt_lines
-                else ""
-            ),
-        )
-
-
-        # ----------------------------------------------------
-        # SECOND STAGE:
-        # VIDEO ID -> HLS
-        # ----------------------------------------------------
-
-
-        logging.info(
-            "HLS STAGE START: cards=%d",
-            len(cards),
-        )
-
-
-        streams = resolve_tv_streams(
-            scraper,
-            cards,
-        )
-
-
-        logging.info(
-            "HLS STAGE COMPLETE: streams=%d",
-            len(streams),
-        )
-
-
-        write_json(
-            output_dir
-            / "rutube_tv_streams.json",
-            streams,
-        )
-
-
-        write_jsonl(
-            output_dir
-            / "rutube_tv_streams.jsonl",
-            streams,
-        )
-
-
-        m3u = make_m3u(
-            streams
-        )
-
-
-        write_text(
-            output_dir
-            / M3U_FILENAME,
-            m3u,
-        )
-
-
-        finished_at = utc_now_iso()
-
-
-        scraper.finished_at = (
-            finished_at
-        )
-
-
-        report = build_report(
-            scraper,
-            cards,
-            streams,
-            started_at,
-            finished_at,
-        )
-
-
-        write_json(
-            output_dir
-            / "rutube_tv_report.json",
-            report,
-        )
-
-
-        logging.info(
-            "AUTONOMOUS TV DISCOVERY FINISHED"
-        )
-
-
-        logging.info(
-            "TV CARDS: %d",
-            len(cards),
-        )
-
-
-        logging.info(
-            "HLS STREAMS: %d",
-            len(streams),
-        )
-
-
-        return 0
-
-
-    except KeyboardInterrupt:
-
-
-        logging.warning(
-            "Interrupted by user"
-        )
-
-
-        return 130
-
-
-    except Exception as exc:
-
-
-        logging.exception(
-            "Autonomous mode failed: %s",
-            exc,
-        )
-
-
-        return 1
 
 
 # ============================================================
@@ -4131,9 +8203,13 @@ def main() -> int:
 # ============================================================
 
 
+
+
 if __name__ == "__main__":
 
 
-    raise SystemExit(
+
+
+    sys.exit(
         main()
     )
