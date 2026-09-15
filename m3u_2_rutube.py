@@ -1252,8 +1252,8 @@ class RutubeScrapper:
 
         adapter = HTTPAdapter(
             max_retries=retry,
-            pool_connections=32,
-            pool_maxsize=32,
+            pool_connections=max(32, BL_RUTUBE_POLL_WORKERS),
+            pool_maxsize=max(32, BL_RUTUBE_POLL_WORKERS),
         )
 
 
@@ -3701,51 +3701,123 @@ class RutubeScrapper:
         max_empty_pages: int,
         target_count: int,
     ) -> List[Dict[str, Any]]:
-        """Ограниченный обход старых полок/категорий до нужного количества."""
+        """
+        Ограниченный legacy-обход, но БЕЗ последовательного зависания на
+        одной странице. Страницы опрашиваются пакетами до 200 параллельных
+        запросов. Как только набрано target_count уникальных карточек,
+        Discovery немедленно прекращается.
+
+        Важно: это всё ещё конечный обход. Мы не превращаем Rutube catalog
+        в бесконечный crawler.
+        """
         result: List[Dict[str, Any]] = []
         seen = set()
+        max_pages = max(1, int(max_pages))
+        max_empty_pages = max(1, int(max_empty_pages))
+        target_count = max(1, int(target_count))
+
         try:
             shelves = self._discover_category_pages(source_url)
         except Exception as exc:
             logging.warning("Legacy traversal shelf discovery failed: %s", exc)
             shelves = []
+
         if not shelves:
             shelves = [("TV", source_url), ("TV Program", TV_PROGRAM_SOURCE_URL)]
 
+        # Убираем полностью дублирующиеся полки, сохраняя порядок.
+        unique_shelves = []
+        shelf_seen = set()
         for category, base_url in shelves:
+            key = (str(category), str(base_url))
+            if key in shelf_seen:
+                continue
+            shelf_seen.add(key)
+            unique_shelves.append((category, base_url))
+        shelves = unique_shelves
+
+        workers = max(1, min(BL_RUTUBE_POLL_WORKERS, 200))
+        logging.info(
+            "LEGACY TRAVERSAL: shelves=%d pages_per_shelf<=%d workers=%d target=%d",
+            len(shelves), max_pages, workers, target_count,
+        )
+
+        # Последовательный обход заменён пакетным: за один раунд запускаем
+        # максимум 200 страниц. Это не даёт одной медленной странице
+        # остановить весь Discovery на минуты.
+        tasks = []
+        for category, base_url in shelves:
+            for page in range(1, max_pages + 1):
+                tasks.append((category, base_url, page))
+
+        for batch_start in range(0, len(tasks), workers):
             if len(result) >= target_count:
                 break
-            empty = 0
-            for page in range(1, max_pages + 1):
-                if len(result) >= target_count:
-                    break
+
+            batch = tasks[batch_start:batch_start + workers]
+            logging.info(
+                "LEGACY TRAVERSAL: batch %d-%d/%d pages",
+                batch_start + 1,
+                batch_start + len(batch),
+                len(tasks),
+            )
+
+            def fetch_one(task):
+                category, base_url, page = task
                 page_url = self._make_page_url(base_url, page)
                 try:
-                    response = self._request("GET", page_url, "tv_bounded_traversal")
-                    found = self._parse_tv_page(response.text, category, page_url)
+                    response = self._request(
+                        "GET",
+                        page_url,
+                        "tv_bounded_traversal",
+                    )
+                    try:
+                        found = self._parse_tv_page(
+                            response.text, category, page_url
+                        )
+                    finally:
+                        response.close()
+                    return task, found, None
                 except Exception as exc:
-                    logging.debug("Traversal page failed: %s | %s", page_url, exc)
-                    empty += 1
-                    if empty >= max_empty_pages:
-                        break
-                    continue
-                if not found:
-                    empty += 1
-                    if empty >= max_empty_pages:
-                        break
-                    continue
-                empty = 0
-                for card in found:
-                    card["artifact_marker"] = "*Телеканалы*"
-                    card["discovered_from"] = "bounded_legacy_traversal"
-                    key = _normalize_tv_identity(str(card.get("title") or ""), str(card.get("video_id") or ""))
-                    if key in seen:
+                    return task, [], exc
+
+            from concurrent.futures import ThreadPoolExecutor, as_completed
+
+            with ThreadPoolExecutor(max_workers=workers) as executor:
+                futures = [executor.submit(fetch_one, task) for task in batch]
+                for future in as_completed(futures):
+                    task, found, exc = future.result()
+                    category, base_url, page = task
+                    if exc is not None:
+                        logging.debug(
+                            "Traversal page failed: %s page=%d | %s",
+                            category, page, exc,
+                        )
                         continue
-                    seen.add(key)
-                    result.append(card)
+
+                    for card in found:
+                        card["artifact_marker"] = "*Телеканалы*"
+                        card["discovered_from"] = "bounded_legacy_traversal"
+                        key = _normalize_tv_identity(
+                            str(card.get("title") or ""),
+                            str(card.get("video_id") or ""),
+                        )
+                        if key in seen:
+                            continue
+                        seen.add(key)
+                        result.append(card)
+                        if len(result) >= target_count:
+                            break
+
                     if len(result) >= target_count:
                         break
-        return result
+
+            logging.info(
+                "LEGACY TRAVERSAL: collected=%d/%d after batch",
+                len(result), target_count,
+            )
+
+        return result[:target_count]
 
     # ========================================================
     # YOUTUBE SUPPLEMENTAL DISCOVERY
