@@ -3,72 +3,274 @@ name: m3u_2_rutube
 on:
   workflow_dispatch:
 
+permissions:
+  contents: write
+  actions: read
+
 jobs:
   m3u_2_rutube:
-    name: m3u_2_rutube
+    name: m3u_2_rutube — 24/7 TV Discovery
     runs-on: ubuntu-latest
     timeout-minutes: 120
 
     steps:
+
+      # ============================================================
+      # 1. CHECKOUT
+      # ============================================================
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      # ============================================================
+      # 2. PYTHON
+      # ============================================================
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
+      # ============================================================
+      # 3. DEPENDENCIES
+      # ============================================================
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install "requests>=2.31,<3"
 
+      # ============================================================
+      # 4. DOWNLOAD CURRENT SCRAPER
+      # ============================================================
       - name: Download m3u_2_rutube.py
         run: |
-          curl -L \
+          set -e
+
+          curl -fL \
             "https://raw.githubusercontent.com/Phoenix89S/Zoye-Einige-87/main/m3u_2_rutube.py" \
             -o m3u_2_rutube.py
 
+          echo "===== SCRIPT ====="
+          wc -l m3u_2_rutube.py
+
+      # ============================================================
+      # 5. CHECK SYNTAX
+      # ============================================================
       - name: Check Python syntax
         run: |
+          set -e
           python -m py_compile m3u_2_rutube.py
+          echo "Python syntax: OK"
 
+      # ============================================================
+      # 6. RUN
+      #
+      # Скрипт сам работает со своей историей.
+      #
+      # Цель:
+      #   - искать реальные 24/7 телеканалы
+      #   - использовать *Телеканалы*
+      #   - использовать TV Programm
+      #   - использовать категории
+      #   - использовать legacy traversal
+      #   - добирать дополнительные каналы
+      #   - остановить Discovery на 400 уникальных TV
+      #
+      # После Discovery:
+      #   video_id
+      #      ↓
+      #   play/options
+      #      ↓
+      #   ВСЕ bl.rutube.ru/livestream/*.m3u8
+      #      ↓
+      #   poll КАЖДОГО конкретного HLS
+      # ============================================================
       - name: Run m3u_2_rutube
         env:
           RUTUBE_PHONE: ${{ secrets.RUTUBE_PHONE }}
           RUTUBE_PASSWORD: ${{ secrets.RUTUBE_PASSWORD }}
+
+          # Доступ к предыдущим GitHub Actions Artifacts.
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+          # --------------------------------------------------------
+          # TV DISCOVERY
+          # --------------------------------------------------------
+          RUTUBE_TV_TARGET_COUNT: "400"
+
+          # Основной legacy/catalog traversal.
+          RUTUBE_MAX_PAGES: "200"
+          RUTUBE_CATEGORY_MAX_PAGES: "200"
+
+          # Сколько пустых страниц допускаем подряд.
+          RUTUBE_MAX_EMPTY_PAGES: "3"
+
+          # --------------------------------------------------------
+          # Дополнительный discovery
+          # --------------------------------------------------------
+          YOUTUBE_DISCOVERY_MAX_CANDIDATES: "5000"
+
+          # --------------------------------------------------------
+          # BL.RUTUBE.RU FULL HLS POLLING
+          # --------------------------------------------------------
+          BL_RUTUBE_POLL_WORKERS: "200"
+          BL_RUTUBE_POLL_TIMEOUT: "12"
+          BL_RUTUBE_MAX_BODY_BYTES: "1048576"
+
+          # --------------------------------------------------------
+          # Оставляем существующие параметры скрипта.
+          # --------------------------------------------------------
           RUTUBE_TEST_STREAMS: "0"
           RUTUBE_TV_ONLY_ALIVE: "0"
-          RUTUBE_MAX_PAGES: "100"
-          RUTUBE_CATEGORY_MAX_PAGES: "100"
-          PYTHONUNBUFFERED: "1"
-        run: |
-          python m3u_2_rutube.py
 
-      - name: Show generated files
+          PYTHONUNBUFFERED: "1"
+
+        run: |
+          set -e
+
+          echo "============================================================"
+          echo "START m3u_2_rutube"
+          echo "============================================================"
+
+          python --version
+
+          echo
+          echo "Script:"
+          wc -l m3u_2_rutube.py
+
+          echo
+          echo "============================================================"
+          echo "RUN SCRAPER"
+          echo "============================================================"
+
+          python -u m3u_2_rutube.py
+
+      # ============================================================
+      # 7. ПОКАЗЫВАЕМ РЕЗУЛЬТАТ ТЕКУЩЕГО ЗАПУСКА
+      # ============================================================
+      - name: Show current run results
         if: always()
         run: |
-          echo "===== GENERATED FILES ====="
-          find . -maxdepth 3 -type f | sort
+          echo "============================================================"
+          echo "CURRENT RUN — RUTUBE OUTPUT"
+          echo "============================================================"
 
-          echo "===== RUTUBE OUTPUT ====="
           if [ -d "rutube_output" ]; then
             find rutube_output -type f | sort
           else
             echo "rutube_output not found"
           fi
 
-      - name: Upload m3u_2_rutube results
+          echo
+          echo "============================================================"
+          echo "CURRENT RUN — ROOT FILES"
+          echo "============================================================"
+
+          find . \
+            -maxdepth 1 \
+            -type f \
+            \( \
+              -name "*.m3u" \
+              -o -name "*.m3u8" \
+              -o -name "*.json" \
+              -o -name "*.jsonl" \
+              -o -name "*.log" \
+              -o -name "*.txt" \
+              -o -name "*.db" \
+            \) \
+            -print \
+            | sort
+
+      # ============================================================
+      # 8. PUSH В РЕПОЗИТОРИЙ
+      #
+      # ВАЖНО:
+      #
+      # Здесь НЕ скачивается и НЕ пушится старый Artifact.
+      #
+      # git add выполняется ПОСЛЕ запуска скрипта.
+      # Поэтому в commit попадает состояние, которое получилось
+      # именно в ЭТОМ запуске.
+      # ============================================================
+      - name: Push current run results to repository
+        if: success()
+        run: |
+          set -e
+
+          echo "============================================================"
+          echo "PREPARE CURRENT RUN FOR GIT"
+          echo "============================================================"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          # --------------------------------------------------------
+          # Добавляем результат текущего запуска.
+          # --------------------------------------------------------
+          if [ -d "rutube_output" ]; then
+            git add rutube_output/
+          fi
+
+          # Накопительная карточная база, если создана/обновлена.
+          if [ -f "rutube_tv_cumulative_cards.json" ]; then
+            git add rutube_tv_cumulative_cards.json
+          fi
+
+          # SQLite cache, если скрипт его использует.
+          if [ -f "Denis_iptv_cache.db" ]; then
+            git add Denis_iptv_cache.db
+          fi
+
+          # --------------------------------------------------------
+          # Показываем, что именно пойдёт в commit.
+          # --------------------------------------------------------
+          echo
+          echo "============================================================"
+          echo "STAGED CURRENT RUN RESULTS"
+          echo "============================================================"
+
+          git status --short
+
+          # --------------------------------------------------------
+          # Нечего коммитить.
+          # --------------------------------------------------------
+          if git diff --cached --quiet; then
+            echo
+            echo "No changes from current run."
+            exit 0
+          fi
+
+          # --------------------------------------------------------
+          # Commit ТЕКУЩЕГО результата.
+          # --------------------------------------------------------
+          git commit \
+            -m "Update Rutube 24/7 TV discovery results"
+
+          # --------------------------------------------------------
+          # Push ТЕКУЩЕГО результата.
+          # --------------------------------------------------------
+          git push
+
+      # ============================================================
+      # 9. СОХРАНЯЕМ РЕЗУЛЬТАТ ТЕКУЩЕГО ЗАПУСКА В ARTIFACT
+      #
+      # Это уже НЕ предыдущий Artifact.
+      # Это новый Artifact, созданный после текущего запуска.
+      # ============================================================
+      - name: Upload current run artifact
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: m3u_2_rutube
           path: |
             rutube_output/
+            rutube_tv_cumulative_cards.json
+            Denis_iptv_cache.db
           if-no-files-found: warn
           retention-days: 30
 
-      - name: Upload M3U
+      # ============================================================
+      # 10. M3U / M3U8
+      # ============================================================
+      - name: Upload current M3U
         if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -81,7 +283,10 @@ jobs:
           if-no-files-found: warn
           retention-days: 30
 
-      - name: Upload JSON and ML data
+      # ============================================================
+      # 11. JSON / JSONL / DB
+      # ============================================================
+      - name: Upload current data
         if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -89,12 +294,17 @@ jobs:
           path: |
             *.json
             *.jsonl
+            *.db
             rutube_output/**/*.json
             rutube_output/**/*.jsonl
+            rutube_output/**/*.db
           if-no-files-found: warn
           retention-days: 30
 
-      - name: Upload logs
+      # ============================================================
+      # 12. LOGS
+      # ============================================================
+      - name: Upload current logs
         if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -106,3 +316,21 @@ jobs:
             rutube_output/**/*.txt
           if-no-files-found: warn
           retention-days: 30
+
+      # ============================================================
+      # 13. FINAL SUMMARY
+      # ============================================================
+      - name: Final summary
+        if: always()
+        run: |
+          echo
+          echo "============================================================"
+          echo "m3u_2_rutube FINISHED"
+          echo "============================================================"
+
+          echo "Target: 400 unique 24/7 TV channels"
+          echo "Current run results: processed"
+          echo "Current run results: pushed to repository when changed"
+          echo "Current run results: uploaded as new Artifact"
+          echo "HLS: all discovered concrete bl.rutube.ru livestream URLs"
+          echo "Polling: every discovered concrete HLS URL"
