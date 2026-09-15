@@ -185,7 +185,8 @@ except ImportError:
 
 
 
-VERSION = "2.4.0-TV-ARTIFACT-400-BL-FULL"
+VERSION = "2.4.1-TV-ARTIFACT-400-BL-MERGED"
+
 
 # Полный опрос конкретных balancer HLS URL.
 # Важно: это не каталог и не бесконечный crawler домена.
@@ -324,7 +325,9 @@ FALLBACK_CATEGORY_URLS = {
 #
 # RUTUBE_MAX_PAGES=200
 #
-DEFAULT_MAX_PAGES = 100
+# Жёсткий потолок страниц на полку.
+# 100+ приводил к ощущению «опять в цикл» после перечисления полок.
+DEFAULT_MAX_PAGES = 12
 
 
 
@@ -338,6 +341,7 @@ DEFAULT_MAX_PAGES = 100
 #
 # Останавливаемся после MAX_EMPTY_PAGES подряд пустых страниц.
 DEFAULT_MAX_EMPTY_PAGES = 2
+
 
 
 
@@ -419,8 +423,10 @@ TV_ARTIFACT_MARKER_RE = re.compile(
 YOUTUBE_DISCOVERY_MAX_CANDIDATES = 600
 # Ограниченный старый обход каталога: используем как дополнительный
 # источник накопленных карточек, но никогда не крутим его бесконечно.
-LEGACY_TRAVERSAL_MAX_PAGES = 200
-LEGACY_TRAVERSAL_MAX_EMPTY_PAGES = 3
+# Раньше 200 × число полок давало ощущение вечного цикла.
+LEGACY_TRAVERSAL_MAX_PAGES = 12
+LEGACY_TRAVERSAL_MAX_EMPTY_PAGES = 2
+
 
 # Сколько предыдущих логов/телеметрических файлов читаем.
 PREVIOUS_TELEMETRY_MAX_FILES = 50
@@ -4697,57 +4703,24 @@ class RutubeScrapper:
         page_html: str,
         current_page: int,
     ) -> bool:
-
-
-
-
-        next_patterns = [
-            r'href\s*=\s*["\'][^"\']*'
-            r'page[-=]'
-            r'\d+[^"\']*["\']',
-
-
-
-
-            r'"page"\s*:\s*'
-            r'["\']?'
-            r'\d+',
-
-
-
-
+        """
+        Строгая проверка следующей страницы.
+        Старые широкие паттерны давали false-positive
+        и заставляли крутить до max_pages.
+        """
+        strict_patterns = [
             r'"hasNext"\s*:\s*true',
-
-
-
-
             r'"has_next"\s*:\s*true',
-
-
-
-
-            r'"next"\s*:\s*',
+            rf'page[-=]{current_page + 1}\b',
+            rf'[?&]page={current_page + 1}\b',
+            r'rel\s*=\s*["\']next["\']',
+            r'"next"\s*:\s*"[^"]+"',
         ]
-
-
-
-
-        for pattern in next_patterns:
-
-
-
-
-            if re.search(
-                pattern,
-                page_html,
-                re.IGNORECASE,
-            ):
+        for pattern in strict_patterns:
+            if re.search(pattern, page_html, re.IGNORECASE):
                 return True
-
-
-
-
         return False
+
 
 
 
