@@ -86,13 +86,13 @@ https://bl.rutube.ru/livestream/32dc45cf878497abe1c9695e228f039b/index.m3u8?s=6E
 #EXTINF:-1 tvg-id="rutube_3c47861a8b4b51639e41be092053b966" tvg-name="Известия" group-title="Рутуб кабельная" tvg-group="Рутуб кабельная/Все эфиры" subgroup-title="Все эфиры" tvg-logo="https://pic.rtbcdn.ru/user/c2/f3/c2f3b025b6b81c32b24460d77c08c51d.jpg",79.1 Известия 
 #EXTVLCOPT:http-user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36
 https://bl.rutube.ru/livestream/3c47861a8b4b51639e41be092053b966/index.m3u8?s=BiusOTNEpUiB4fmnEBuvsw&e=2089472541&scheme=https
-#EXTINF:-1 tvg-id="rutube_3c47861a8b4b51639e41be092053b966" tvg-name="Известия" group-title="Рутуб кабельная" tvg-group="Рутуб кабельная/Все эфиры" subgroup-title="Все эфиры" tvg-logo="https://pic.rtbcdn.ru/user/c2/f3/c2f3b025b6b81c32b24460d77c08c51d.jpg",79.1 Известия 
+#EXTINF:-1 tvg-id="rutube_3c47861a8b4b51639e41be092053b966" tvg-name="Известия" group-title="Рутуб кабельная" tvg-group="Рутуб кабельная/Все эфиры" subgroup-title="Все эфиры" tvg-logo="https://pic.rtbcdn.ru/user/c2/f3/c2f3b025b6b81c32b24460d77c08c51d.jpg",79.2 Известия 
 #EXTVLCOPT:http-user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36
 https://bl.rutube.ru/livestream/3c47861a8b4b51639e41be092053b966/index.m3u8?s=BiusOTNEpUiB4fmnEBuvsw&e=2089472541&scheme=https
-#EXTINF:-1 tvg-id="rutube_1da5d92af8c55b16241f1eb12a27f00c" tvg-name="Официальный канал" group-title="Рутуб кабельная" tvg-group="Рутуб кабельная/Все эфиры" subgroup-title="Все эфиры" tvg-logo="https://pic.rtbcdn.ru/user/38/5c/385ccd850d0053603ffc0b99d3d38c74.jpg",Официальный канал
+#EXTINF:-1 tvg-id="rutube_1da5d92af8c55b16241f1eb12a27f00c" tvg-name="Охотник и рыболов Int" group-title="Рутуб кабельная" tvg-group="Рутуб кабельная/Все эфиры" subgroup-title="Все эфиры" tvg-logo="https://pic.rtbcdn.ru/user/38/5c/385ccd850d0053603ffc0b99d3d38c74.jpg",300.1 Охотник и рыболов Int
 #EXTVLCOPT:http-user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36
 https://bl.rutube.ru/livestream/1da5d92af8c55b16241f1eb12a27f00c/index.m3u8?s=RuEk-JzF78hXT8cUab7T-A&e=2089472542&scheme=https
-#EXTINF:-1 tvg-id="rutube_1da5d92af8c55b16241f1eb12a27f00c" tvg-name="Официальный канал" group-title="Рутуб кабельная" tvg-group="Рутуб кабельная/Все эфиры" subgroup-title="Все эфиры" tvg-logo="https://pic.rtbcdn.ru/user/38/5c/385ccd850d0053603ffc0b99d3d38c74.jpg",Официальный канал
+#EXTINF:-1 tvg-id="rutube_1da5d92af8c55b16241f1eb12a27f00c" tvg-name="Охотник и рыболов Int" group-title="Рутуб кабельная" tvg-group="Рутуб кабельная/Все эфиры" subgroup-title="Все эфиры" tvg-logo="https://pic.rtbcdn.ru/user/38/5c/385ccd850d0053603ffc0b99d3d38c74.jpg",300.2 Охотник и рыболов Int
 #EXTVLCOPT:http-user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36
 https://bl.rutube.ru/livestream/1da5d92af8c55b16241f1eb12a27f00c/index.m3u8?s=RuEk-JzF78hXT8cUab7T-A&e=2089472542&scheme=https
 #EXTINF:-1 tvg-id="rutube_bf296006751f4344e359b3b5dc70be25" tvg-name="Манюня" group-title="Рутуб кабельная" tvg-group="Рутуб кабельная/Детские" subgroup-title="Детские",Манюня
