@@ -399,6 +399,13 @@ DISCOVERY_HTML_FILENAME = "rutube_tv_discovery_debug.html"
 # ============================================================
 # CUMULATIVE TV DISCOVERY
 # ============================================================
+# Технические/служебные video_id, которые не являются телеканалами.
+TECHNICAL_VIDEO_ID_TOKENS = (
+    "tvfavorites", "history", "topic", "assets", "banner-",
+    "autowidget", "feedsource", "feed-source", "technical",
+    "service", "widget",
+)
+
 # Сколько уникальных телеканалов реально собираем за один цикл.
 TV_TARGET_COUNT = 400
 
@@ -1305,10 +1312,11 @@ class RutubeScrapper:
 
 
 
+            request_timeout = kwargs.pop("timeout", self.timeout)
             response = self.session.request(
                 method,
                 url,
-                timeout=self.timeout,
+                timeout=request_timeout,
                 verify=self.verify_ssl,
                 **kwargs,
             )
@@ -3770,6 +3778,7 @@ class RutubeScrapper:
                         "GET",
                         page_url,
                         "tv_bounded_traversal",
+                        timeout=(3, 8),
                     )
                     try:
                         found = self._parse_tv_page(
@@ -7432,12 +7441,13 @@ def autonomous_tv_main(
 
     scraper = RutubeScrapper(
         timeout=(
-            10,
+            3,
             args.timeout,
         ),
         verify_ssl=(
             not args.insecure
         ),
+        retries=0,
     )
 
 
