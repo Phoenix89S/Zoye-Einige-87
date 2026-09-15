@@ -11,7 +11,7 @@ https://bl.rutube.ru/livestream/c58f502c7bb34a8fcdd976b221fca292/index.m3u8?s=rh
 #EXTINF:-1 tvg-id="rutube_c58f502c7bb34a8fcdd976b221fca292" tvg-name="Первый канал HD" group-title="Рутуб кабельная" tvg-group="Рутуб кабельная/Все эфиры" subgroup-title="Все эфиры" tvg-logo="https://pic.rtbcdn.ru/user/63/a2/63a2eb1886a45be2b1da64729397230c.jpg",1.1. Первый канал HD(alt)
 #EXTVLCOPT:http-user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36
 https://bl.rutube.ru/livestream/c58f502c7bb34a8fcdd976b221fca292/index.m3u8?s=rhp8dF7SoeJDKW7KWyQPoA&e=2089472524&scheme=https
-#EXTINF:-1 tvg-id="rutube_c37cd74192c6bc3d6cd6077c0c4fd686" tvg-name="Популярные эфиры" group-title="Рутуб кабельная" tvg-group="Рутуб кабельная/Все эфиры" subgroup-title="Все эфиры" tvg-logo="https://pic.rtbcdn.ru/user/63/a2/63a2eb1886a45be2b1da64729397230c.jpg",Популярные эфиры
+#EXTINF:-1 tvg-id="rutube_c37cd74192c6bc3d6cd6077c0c4fd686" tvg-name="4. НТВ HD" group-title="Рутуб кабельная" tvg-group="Рутуб кабельная/Все эфиры" subgroup-title="Все эфиры" tvg-logo="https://pic.rtbcdn.ru/user/63/a2/63a2eb1886a45be2b1da64729397230c.jpg",4. НТВ HD
 #EXTVLCOPT:http-user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36
 https://bl.rutube.ru/livestream/c37cd74192c6bc3d6cd6077c0c4fd686/index.m3u8?s=yhKxPS9HqiOIL_A6tun88w&e=2089472525&scheme=https
 #EXTINF:-1 tvg-id="rutube_c37cd74192c6bc3d6cd6077c0c4fd686" tvg-name="Популярные эфиры" group-title="Рутуб кабельная" tvg-group="Рутуб кабельная/Все эфиры" subgroup-title="Все эфиры" tvg-logo="https://pic.rtbcdn.ru/user/63/a2/63a2eb1886a45be2b1da64729397230c.jpg",Популярные эфиры
