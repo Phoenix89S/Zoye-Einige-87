@@ -1,4 +1,4 @@
-то#EXTM3U url-tvg="https://iptvx.one/EPG"
+#EXTM3U url-tvg="https://iptvx.one/EPG"
 #EXTINF:-1 tvg-id="rutube_9ae8e8a6dc58bdad66190475f9872ecd" tvg-name="Rutube TV" group-title="Рутуб кабельная" tvg-group="Рутуб кабельная/Все эфиры" subgroup-title="Все эфиры",0.1 Rutube TV
 #EXTVLCOPT:http-user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36
 https://bl.rutube.ru/livestream/9ae8e8a6dc58bdad66190475f9872ecd/index.m3u8?s=rb0ezrfRKIySfLqM7VJkQw&e=2089472521&scheme=https
