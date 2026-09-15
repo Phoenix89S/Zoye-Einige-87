@@ -185,8 +185,7 @@ except ImportError:
 
 
 
-VERSION = "2.4.1-TV-ARTIFACT-400-BL-MERGED"
-
+VERSION = "2.4.1-TV-ARTIFACT-400-BL-FULL-ALL-NODES"
 
 # Полный опрос конкретных balancer HLS URL.
 # Важно: это не каталог и не бесконечный crawler домена.
@@ -325,9 +324,7 @@ FALLBACK_CATEGORY_URLS = {
 #
 # RUTUBE_MAX_PAGES=200
 #
-# Жёсткий потолок страниц на полку.
-# 100+ приводил к ощущению «опять в цикл» после перечисления полок.
-DEFAULT_MAX_PAGES = 12
+DEFAULT_MAX_PAGES = 100
 
 
 
@@ -341,7 +338,6 @@ DEFAULT_MAX_PAGES = 12
 #
 # Останавливаемся после MAX_EMPTY_PAGES подряд пустых страниц.
 DEFAULT_MAX_EMPTY_PAGES = 2
-
 
 
 
@@ -412,6 +408,21 @@ TECHNICAL_VIDEO_ID_TOKENS = (
 
 # Сколько уникальных телеканалов реально собираем за один цикл.
 TV_TARGET_COUNT = 400
+# Ищем именно постоянные телеканалы, работающие 24/7, а не разовые
+# спортивные/новостные/концертные live-трансляции. При этом НЕ требуем,
+# чтобы в названии обязательно было "24" или "24/7": у большинства
+# круглосуточных каналов это вообще не указано. Приоритет источника —
+# раздел *Телеканалы* и его категории, затем общий live-каталог.
+TV_24H_ONLY = True
+TV_24H_DISCOVERY_QUERIES = (
+    "круглосуточные телеканалы России 24 часа",
+    "телеканалы России 24/7 прямой эфир",
+    "ТВ каналы 24 часа в сутки Россия",
+    "российские телеканалы круглосуточно live",
+    "телеканал круглосуточный прямой эфир",
+    "24 часа телеканал прямой эфир",
+    "24/7 TV Russia live channel",
+)
 
 # Авторитетный маркер карточки ТВ в артефактах Workflow.
 TV_ARTIFACT_MARKER_RE = re.compile(
@@ -420,26 +431,39 @@ TV_ARTIFACT_MARKER_RE = re.compile(
 )
 
 # Ограничители дополнительного поиска через YouTube.
-YOUTUBE_DISCOVERY_MAX_CANDIDATES = 600
+YOUTUBE_DISCOVERY_MAX_CANDIDATES = 5000
 # Ограниченный старый обход каталога: используем как дополнительный
 # источник накопленных карточек, но никогда не крутим его бесконечно.
-# Раньше 200 × число полок давало ощущение вечного цикла.
-LEGACY_TRAVERSAL_MAX_PAGES = 12
-LEGACY_TRAVERSAL_MAX_EMPTY_PAGES = 2
-
+LEGACY_TRAVERSAL_MAX_PAGES = 200
+LEGACY_TRAVERSAL_MAX_EMPTY_PAGES = 3
 
 # Сколько предыдущих логов/телеметрических файлов читаем.
 PREVIOUS_TELEMETRY_MAX_FILES = 50
 
 YOUTUBE_DISCOVERY_QUERIES = (
-    "телеканалы России прямой эфир",
-    "российские телеканалы live",
-    "телеканалы Москва прямой эфир",
-    "региональные телеканалы России live",
-    "новости телеканал прямой эфир Россия",
-    "спортивные телеканалы России live",
-    "детские телеканалы России live",
-    "музыкальные телеканалы России live",
+    "телеканалы России прямой эфир", "российские телеканалы live",
+    "телеканалы Россия прямой эфир", "телеканалы РФ прямой эфир",
+    "онлайн телеканалы России", "тв каналы России онлайн", "русские телеканалы live",
+    "федеральные телеканалы России прямой эфир", "новостные телеканалы России live",
+    "новости России телеканал прямой эфир", "информационные телеканалы России live",
+    "региональные телеканалы России прямой эфир", "региональные телеканалы РФ live",
+    "областные телеканалы России live", "городские телеканалы России прямой эфир",
+    "телеканалы Москвы live", "телеканалы Санкт Петербурга live",
+    "телеканалы Московской области live", "телеканалы Ленинградской области live",
+    "телеканалы Сибири live", "телеканалы Урала live", "телеканалы Дальнего Востока live",
+    "телеканалы Поволжья live", "телеканалы Юга России live", "телеканалы Кавказа live",
+    "спортивные телеканалы России live", "футбольные телеканалы России live",
+    "детские телеканалы России live", "музыкальные телеканалы России live",
+    "кино телеканалы России live", "познавательные телеканалы России live",
+    "развлекательные телеканалы России live", "автомобильные телеканалы России live",
+    "религиозные телеканалы России live", "православные телеканалы России live",
+    "молодежные телеканалы России live", "бизнес телеканалы России live",
+    "аграрные телеканалы России live", "прямой эфир ТВ Россия",
+    "русское телевидение прямой эфир", "российское телевидение онлайн",
+    "ТВ онлайн Россия 24 часа", "канал ТВ прямой эфир Россия",
+    "телевидение России live", "Russian TV live channels",
+    # Целевой набор: именно круглосуточное телевидение.
+    *TV_24H_DISCOVERY_QUERIES,
 )
 
 
@@ -931,6 +955,25 @@ def _unique_tv_cards(cards: List[Dict[str, Any]], limit: int = TV_TARGET_COUNT) 
     seen_names = set()
     seen_ids = set()
 
+    # Эти названия часто являются заголовком полки/служебной
+    # страницы, а не реальным названием телеканала. Если использовать
+    # их как ключ уникальности, десятки разных live/video карточек
+    # ошибочно схлопываются в один канал. Для таких карточек уникальность
+    # должна определяться по реальному Rutube video_id.
+    generic_titles = {
+        "в топе",
+        "популярные эфиры",
+        "галерея популярные эфиры",
+        "официальный канал",
+        "прямой эфир",
+        "сейчас в эфире",
+        "телеканалы",
+        "главная",
+        "live",
+        "rutube",
+        "rutube tv",
+    }
+
     for card in cards:
         title = str(
             card.get("title")
@@ -950,7 +993,12 @@ def _unique_tv_cards(cards: List[Dict[str, Any]], limit: int = TV_TARGET_COUNT) 
         # Реальное имя предпочтительнее video_id: новый video_id
         # того же канала не должен создавать второй канал.
         name_key = ""
-        if title and not title.lower().startswith("rutube "):
+        title_key = re.sub(r"\s+", " ", title).strip().lower()
+        if (
+            title
+            and not title.lower().startswith("rutube ")
+            and title_key not in generic_titles
+        ):
             name_key = _normalize_tv_identity(title)
             if name_key == "name:":
                 name_key = ""
@@ -1981,11 +2029,62 @@ class RutubeScrapper:
         self,
         video_id: str,
     ) -> List[str]:
-        """Возвращает ВСЕ livestream HLS URL из полного play/options ответа."""
-        data = self.get_live_options(video_id)
+        """
+        Возвращает ВСЕ livestream HLS URL из полного play/options ответа.
+
+        Для TV Discovery один неудачный ответ play/options не должен
+        выбрасывать весь канал. Делаем несколько быстрых попыток получения
+        узла, объединяем результаты и не режем список потоков.
+        """
+        attempts = 3
         result: List[str] = []
-        self._collect_balancer_hls_urls(data, result)
-        logging.info("RUTUBE BALANCER: video_id=%s streams=%d", video_id, len(result))
+        errors: List[str] = []
+
+        for attempt in range(1, attempts + 1):
+            try:
+                data = self.get_live_options(video_id)
+                before = len(result)
+                self._collect_balancer_hls_urls(data, result)
+                found_now = len(result) - before
+
+                logging.info(
+                    "RUTUBE BALANCER: video_id=%s attempt=%d/%d streams_found=%d",
+                    video_id,
+                    attempt,
+                    attempts,
+                    found_now,
+                )
+
+                # Если узел уже вернул хотя бы один concrete URL, не
+                # создаём лишний трафик. Все найденные URL уже сохранены.
+                if result:
+                    break
+
+            except Exception as exc:
+                errors.append(str(exc))
+                logging.warning(
+                    "RUTUBE BALANCER RETRY: video_id=%s attempt=%d/%d error=%s",
+                    video_id,
+                    attempt,
+                    attempts,
+                    exc,
+                )
+                if attempt < attempts:
+                    time.sleep(0.15 * attempt)
+
+        if errors and not result:
+            logging.warning(
+                "RUTUBE BALANCER: video_id=%s no HLS after %d attempts: %s",
+                video_id,
+                attempts,
+                errors[-1],
+            )
+
+        logging.info(
+            "RUTUBE BALANCER: video_id=%s streams=%d",
+            video_id,
+            len(result),
+        )
         return result
 
     @staticmethod
@@ -1996,16 +2095,42 @@ class RutubeScrapper:
 
     @classmethod
     def _collect_balancer_hls_urls(cls, value: Any, result: List[str]) -> None:
+        """Рекурсивно извлекает ВСЕ concrete balancer HLS URL.
+
+        Rutube может возвращать часть данных не только как отдельное
+        JSON-поле, но и как сериализованную/экранированную строку. Поэтому
+        одного обхода dict/list недостаточно: строковые узлы дополнительно
+        просматриваются регулярным выражением. Дубликаты намеренно НЕ
+        удаляются — один и тот же video_id может содержать несколько
+        подписанных вариантов URL.
+        """
         if isinstance(value, str):
             url = value.strip()
+            if "\\/" in url:
+                url = url.replace("\\/", "/")
             if cls._is_rutube_balancer_hls(url):
                 result.append(url)
+
+            # Иногда JSON/API вкладывает URL внутрь сериализованной
+            # строки. Извлекаем каждое concrete livestream URL, сохраняя
+            # полный query string.
+            embedded_value = value.replace("\\/", "/")
+            for match in re.finditer(
+                r"https://bl\.rutube\.ru/livestream/[^\s\"'<>\\]+?\.m3u8(?:\?[^\s\"'<>\\]+)?",
+                embedded_value,
+                re.IGNORECASE,
+            ):
+                embedded = match.group(0)
+                if cls._is_rutube_balancer_hls(embedded):
+                    result.append(embedded)
             return
+
         if isinstance(value, dict):
             for child in value.values():
                 cls._collect_balancer_hls_urls(child, result)
             return
-        if isinstance(value, (list, tuple)):
+
+        if isinstance(value, (list, tuple, set)):
             for child in value:
                 cls._collect_balancer_hls_urls(child, result)
 
@@ -3632,6 +3757,11 @@ class RutubeScrapper:
         """
         Финальный TV Discovery:
 
+        Цель: собрать уникальные круглосуточные (24/7) телеканалы.
+        Это НЕ означает фильтр по строке "24" в названии: канал считается
+        кандидатом именно как TV-card из раздела телеканалов/каталога, а
+        разовые live-события не должны становиться отдельными телеканалами.
+
         1. Сначала загружаем артефакты предыдущих Workflow-запусков.
         2. Берём только контексты с явным маркером *Телеканалы*.
         3. Строим множество уникальных реальных ТВ-каналов.
@@ -3645,7 +3775,11 @@ class RutubeScrapper:
         output_dir = Path(output_dir or OUTPUT_DIR)
         target_count = max(1, int(target_count))
 
-        logging.info("TV DISCOVERY TARGET: %d UNIQUE CHANNELS", target_count)
+        logging.info(
+            "TV DISCOVERY TARGET: %d UNIQUE 24/7 TV CHANNELS | TV_24H_ONLY=%s",
+            target_count,
+            TV_24H_ONLY,
+        )
         logging.info("TV DISCOVERY STEP 1: previous Workflow artifacts")
 
         cards = load_previous_tv_cards(output_dir)
@@ -3674,7 +3808,10 @@ class RutubeScrapper:
                 target_count=missing,
             )
             unique_cards = _unique_tv_cards(unique_cards + traversal_cards, target_count)
-            logging.info("TV DISCOVERY TRAVERSAL RESULT: unique=%d/%d", len(unique_cards), target_count)
+            logging.info(
+                "TV DISCOVERY TRAVERSAL RESULT: unique=%d/%d 24/7-channel candidates",
+                len(unique_cards), target_count,
+            )
 
         if len(unique_cards) < target_count:
             missing = target_count - len(unique_cards)
@@ -3703,7 +3840,7 @@ class RutubeScrapper:
         save_cumulative_tv_cards(output_dir, unique_cards)
 
         logging.info(
-            "TV DISCOVERY FINAL: %d unique TV channels",
+            "TV DISCOVERY FINAL: %d unique 24/7 TV-channel candidates",
             len(unique_cards),
         )
         return unique_cards
@@ -3716,69 +3853,197 @@ class RutubeScrapper:
         target_count: int,
     ) -> List[Dict[str, Any]]:
         """
-        Ограниченный legacy-обход, но БЕЗ последовательного зависания на
-        одной странице. Страницы опрашиваются пакетами до 200 параллельных
-        запросов. Как только набрано target_count уникальных карточек,
-        Discovery немедленно прекращается.
+        Гибридный legacy-обход каталога, объединённый с современной
+        параллельной моделью Discovery.
 
-        Важно: это всё ещё конечный обход. Мы не превращаем Rutube catalog
-        в бесконечный crawler.
+        Старый механизм важен здесь не как отдельный crawler, а как
+        резервный способ добора реальных /live/video/<id> карточек, когда
+        API/HTML discovery полок недоступен или возвращает неполный набор.
+
+        Алгоритм:
+
+        1. Пытаемся получить реальные полки через современный
+           _discover_category_pages().
+        2. ВСЕГДА добавляем старые FALLBACK_CATEGORY_URLS. Это критично:
+           если Rutube не отдаёт страницу каталога, мы всё равно знаем
+           прямые адреса категорий из старого рабочего механизма.
+        3. ВСЕГДА добавляем главную live-полку и tvprogramm.
+        4. Для каждой полки сначала проверяем страницу 1.
+        5. Следующие страницы добавляются только для тех полок, где уже
+           действительно обнаружены карточки либо HTML явно сообщает о
+           продолжении. При этом страницу 2 после непустой страницы
+           проверяем хотя бы один раз, как делал старый обход.
+        6. Запросы выполняются пакетами параллельно, но состояние обхода
+           каждой полки сохраняется отдельно.
+        7. Из каждой страницы берём ВСЕ реальные /live/video/<id> карточки.
+           Глобального ограничения в 5/10/20 карточек нет.
+        8. Discovery останавливается только после target_count уникальных
+           реальных TV-карточек либо после полного исчерпания конечного
+           набора страниц.
+
+        Таким образом старый механизм обхода не выброшен, а встроен в
+        современный быстрый Discovery как полноценный fallback.
         """
+
         result: List[Dict[str, Any]] = []
         seen = set()
+
         max_pages = max(1, int(max_pages))
         max_empty_pages = max(1, int(max_empty_pages))
         target_count = max(1, int(target_count))
 
+        # --------------------------------------------------------
+        # 1. Современное обнаружение полок.
+        # --------------------------------------------------------
         try:
-            shelves = self._discover_category_pages(source_url)
+            discovered_shelves = self._discover_category_pages(source_url)
         except Exception as exc:
-            logging.warning("Legacy traversal shelf discovery failed: %s", exc)
-            shelves = []
+            logging.warning(
+                "Legacy traversal modern shelf discovery failed: %s",
+                exc,
+            )
+            discovered_shelves = []
 
-        if not shelves:
-            shelves = [("TV", source_url), ("TV Program", TV_PROGRAM_SOURCE_URL)]
-
-        # Убираем полностью дублирующиеся полки, сохраняя порядок.
-        unique_shelves = []
+        # --------------------------------------------------------
+        # 2. Объединяем современный механизм со СТАРЫМ списком
+        #    прямых категорий. Fallback нельзя добавлять только при
+        #    полном провале discovery: API может вернуть лишь часть полок.
+        # --------------------------------------------------------
+        shelves: List[Tuple[str, str]] = []
         shelf_seen = set()
-        for category, base_url in shelves:
-            key = (str(category), str(base_url))
-            if key in shelf_seen:
-                continue
-            shelf_seen.add(key)
-            unique_shelves.append((category, base_url))
-        shelves = unique_shelves
 
-        workers = max(1, min(BL_RUTUBE_POLL_WORKERS, 200))
+        def add_shelf(category: str, url: str) -> None:
+            category = str(category or "Без категории").strip()
+            url = str(url or "").strip()
+            if not url:
+                return
+
+            key = url.rstrip("/").lower()
+            if key in shelf_seen:
+                return
+
+            shelf_seen.add(key)
+            shelves.append((category, url))
+
+        # Главная live-полка — старый обход всегда начинал с неё.
+        add_shelf("Все эфиры", source_url)
+
+        # Отдельная TV program полка.
+        add_shelf("Телеканалы", TV_PROGRAM_SOURCE_URL)
+
+        # Современные реально обнаруженные полки.
+        for category, base_url in discovered_shelves:
+            add_shelf(category, base_url)
+
+        # Старые прямые URL категорий — обязательный fallback и добор.
+        for category, base_url in FALLBACK_CATEGORY_URLS.items():
+            add_shelf(category, base_url)
+
         logging.info(
-            "LEGACY TRAVERSAL: shelves=%d pages_per_shelf<=%d workers=%d target=%d",
-            len(shelves), max_pages, workers, target_count,
+            "LEGACY TRAVERSAL: modern_shelves=%d total_shelves=%d",
+            len(discovered_shelves),
+            len(shelves),
         )
 
-        # Последовательный обход заменён пакетным: за один раунд запускаем
-        # максимум 200 страниц. Это не даёт одной медленной странице
-        # остановить весь Discovery на минуты.
-        tasks = []
-        for category, base_url in shelves:
-            for page in range(1, max_pages + 1):
-                tasks.append((category, base_url, page))
+        if not shelves:
+            logging.warning(
+                "LEGACY TRAVERSAL: no shelves available at all"
+            )
+            return result
 
-        for batch_start in range(0, len(tasks), workers):
-            if len(result) >= target_count:
+        # --------------------------------------------------------
+        # 3. Состояние каждой полки.
+        # --------------------------------------------------------
+        # next_page — следующая страница, которую нужно запросить.
+        # empty_pages — последовательность пустых страниц.
+        # active — нужно ли продолжать обход этой полки.
+        # page_seen — уже реально обработанные страницы.
+        shelf_state: Dict[str, Dict[str, Any]] = {}
+
+        for category, base_url in shelves:
+            shelf_key = base_url.rstrip("/").lower()
+            shelf_state[shelf_key] = {
+                "category": category,
+                "base_url": base_url,
+                "next_page": 1,
+                "empty_pages": 0,
+                "active": True,
+                "page_seen": set(),
+                "last_found": 0,
+                "last_has_next": True,
+            }
+
+        workers = max(
+            1,
+            min(
+                BL_RUTUBE_POLL_WORKERS,
+                200,
+            ),
+        )
+
+        logging.info(
+            "LEGACY TRAVERSAL: shelves=%d pages_per_shelf<=%d workers=%d target=%d",
+            len(shelves),
+            max_pages,
+            workers,
+            target_count,
+        )
+
+        # --------------------------------------------------------
+        # 4. Раундовый параллельный обход.
+        #
+        # В отличие от старой полностью последовательной версии мы не
+        # ждём одну медленную категорию. Но в отличие от прежней грубой
+        # версии не создаём сразу тысячи запросов ко всем page=1..200.
+        # Следующая страница появляется только после результата предыдущей.
+        # --------------------------------------------------------
+        round_number = 0
+
+        while len(result) < target_count:
+            round_number += 1
+            tasks = []
+
+            for state in shelf_state.values():
+                if not state["active"]:
+                    continue
+
+                page = int(state["next_page"])
+                if page > max_pages:
+                    state["active"] = False
+                    continue
+
+                page_key = (state["base_url"], page)
+                if page_key in state["page_seen"]:
+                    state["active"] = False
+                    continue
+
+                state["page_seen"].add(page_key)
+                tasks.append(
+                    (
+                        state["category"],
+                        state["base_url"],
+                        page,
+                    )
+                )
+
+            if not tasks:
                 break
 
-            batch = tasks[batch_start:batch_start + workers]
             logging.info(
-                "LEGACY TRAVERSAL: batch %d-%d/%d pages",
-                batch_start + 1,
-                batch_start + len(batch),
+                "LEGACY TRAVERSAL: round=%d pages=%d collected=%d/%d",
+                round_number,
                 len(tasks),
+                len(result),
+                target_count,
             )
 
             def fetch_one(task):
                 category, base_url, page = task
-                page_url = self._make_page_url(base_url, page)
+                page_url = self._make_page_url(
+                    base_url,
+                    page,
+                )
+
                 try:
                     response = self._request(
                         "GET",
@@ -3786,51 +4051,191 @@ class RutubeScrapper:
                         "tv_bounded_traversal",
                         timeout=(3, 8),
                     )
+
                     try:
-                        found = self._parse_tv_page(
-                            response.text, category, page_url
-                        )
+                        html_text = response.text
                     finally:
                         response.close()
-                    return task, found, None
+
+                    found = self._parse_tv_page(
+                        html_text,
+                        category,
+                        page_url,
+                    )
+
+                    has_next = self._has_next_page(
+                        html_text,
+                        page,
+                    )
+
+                    return (
+                        task,
+                        found,
+                        has_next,
+                        None,
+                    )
+
                 except Exception as exc:
-                    return task, [], exc
+                    return (
+                        task,
+                        [],
+                        False,
+                        exc,
+                    )
 
-            from concurrent.futures import ThreadPoolExecutor, as_completed
+            from concurrent.futures import (
+                ThreadPoolExecutor,
+                as_completed,
+            )
 
-            with ThreadPoolExecutor(max_workers=workers) as executor:
-                futures = [executor.submit(fetch_one, task) for task in batch]
+            with ThreadPoolExecutor(
+                max_workers=min(workers, len(tasks)),
+            ) as executor:
+                futures = {
+                    executor.submit(
+                        fetch_one,
+                        task,
+                    ): task
+                    for task in tasks
+                }
+
                 for future in as_completed(futures):
-                    task, found, exc = future.result()
+                    task = futures[future]
                     category, base_url, page = task
+
+                    try:
+                        (
+                            _task,
+                            found,
+                            has_next,
+                            exc,
+                        ) = future.result()
+                    except Exception as future_exc:
+                        found = []
+                        has_next = False
+                        exc = future_exc
+
+                    shelf_key = base_url.rstrip("/").lower()
+                    state = shelf_state.get(shelf_key)
+
+                    if state is None:
+                        continue
+
                     if exc is not None:
                         logging.debug(
                             "Traversal page failed: %s page=%d | %s",
-                            category, page, exc,
+                            category,
+                            page,
+                            exc,
                         )
+
+                        # Ошибка одной страницы не должна убить весь
+                        # Discovery. Разрешаем перейти дальше, но не
+                        # запускаем бесконечные повторы одной страницы.
+                        state["empty_pages"] += 1
+
+                        if (
+                            state["empty_pages"]
+                            >= max_empty_pages
+                        ):
+                            state["active"] = False
+                        else:
+                            state["next_page"] = page + 1
+
                         continue
+
+                    # ------------------------------------------------
+                    # Карточки страницы.
+                    # ------------------------------------------------
+                    if found:
+                        state["empty_pages"] = 0
+                        state["last_found"] = len(found)
+                    else:
+                        state["empty_pages"] += 1
+                        state["last_found"] = 0
 
                     for card in found:
                         card["artifact_marker"] = "*Телеканалы*"
-                        card["discovered_from"] = "bounded_legacy_traversal"
-                        key = _normalize_tv_identity(
-                            str(card.get("title") or ""),
-                            str(card.get("video_id") or ""),
+                        card["discovered_from"] = (
+                            "legacy_hybrid_traversal"
                         )
+                        card["traversal_category"] = category
+                        card["traversal_page"] = page
+
+                        video_id = str(
+                            card.get("video_id") or ""
+                        ).strip()
+                        title = str(
+                            card.get("title") or ""
+                        ).strip()
+
+                        # Внутри Discovery используем video_id как
+                        # основной ключ реальной карточки. Это позволяет
+                        # двум разным каналам с похожими/одинаковыми
+                        # названиями не потеряться на этапе обхода.
+                        key = _normalize_tv_identity(
+                            title,
+                            video_id,
+                        )
+
                         if key in seen:
                             continue
+
                         seen.add(key)
                         result.append(card)
+
                         if len(result) >= target_count:
                             break
+
+                    logging.info(
+                        "LEGACY TRAVERSAL PAGE: %s page=%d found=%d total=%d next=%s",
+                        category,
+                        page,
+                        len(found),
+                        len(result),
+                        has_next,
+                    )
 
                     if len(result) >= target_count:
                         break
 
+                    # ------------------------------------------------
+                    # Логика продолжения страницы из старого механизма.
+                    #
+                    # Если карточки есть — page+1 проверяем всегда.
+                    # Это важно для динамических Rutube-страниц, где
+                    # HTML может не содержать явного next.
+                    # Если карточек нет несколько раз подряд — полку
+                    # считаем исчерпанной.
+                    # ------------------------------------------------
+                    if state["empty_pages"] >= max_empty_pages:
+                        state["active"] = False
+                        continue
+
+                    if page >= max_pages:
+                        state["active"] = False
+                        continue
+
+                    if found or has_next or page == 1:
+                        state["next_page"] = page + 1
+                        state["last_has_next"] = has_next
+                    else:
+                        state["active"] = False
+
             logging.info(
-                "LEGACY TRAVERSAL: collected=%d/%d after batch",
-                len(result), target_count,
+                "LEGACY TRAVERSAL: round=%d completed collected=%d/%d",
+                round_number,
+                len(result),
+                target_count,
             )
+
+        logging.info(
+            "LEGACY TRAVERSAL FINAL: collected=%d/%d shelves=%d rounds=%d",
+            len(result),
+            target_count,
+            len(shelves),
+            round_number,
+        )
 
         return result[:target_count]
 
@@ -4361,6 +4766,18 @@ class RutubeScrapper:
                 title = f"Rutube {video_id}"
 
 
+            # В TV-программе / категориях телеканалов эта карточка является
+            # именно телевизионным каналом. Не называем её просто "event" даже
+            # если URL технически является live-video.
+            category_l = str(category or "").strip().lower()
+            is_tv_catalog_card = (
+                "телеканал" in category_l
+                or "тв" == category_l
+                or "tv" == category_l
+                or "tvprogramm" in str(page_url).lower()
+                or "/tvprogramm/" in str(page_url).lower()
+            )
+
             records.append({
                 "video_id": video_id,
                 "title": title,
@@ -4368,7 +4785,9 @@ class RutubeScrapper:
                 "source_url": page_url,
                 "catalog_url": f"https://rutube.ru/live/video/{video_id}/",
                 "logo": logo,
-                "card_type": "live",
+                "card_type": "tv_channel" if is_tv_catalog_card else "live",
+                "tv_channel_candidate": True,
+                "tv_24h_candidate": bool(is_tv_catalog_card),
                 "discovered_at": datetime.now(timezone.utc).isoformat(),
             })
 
@@ -4703,24 +5122,57 @@ class RutubeScrapper:
         page_html: str,
         current_page: int,
     ) -> bool:
-        """
-        Строгая проверка следующей страницы.
-        Старые широкие паттерны давали false-positive
-        и заставляли крутить до max_pages.
-        """
-        strict_patterns = [
-            r'"hasNext"\s*:\s*true',
-            r'"has_next"\s*:\s*true',
-            rf'page[-=]{current_page + 1}\b',
-            rf'[?&]page={current_page + 1}\b',
-            r'rel\s*=\s*["\']next["\']',
-            r'"next"\s*:\s*"[^"]+"',
-        ]
-        for pattern in strict_patterns:
-            if re.search(pattern, page_html, re.IGNORECASE):
-                return True
-        return False
 
+
+
+
+        next_patterns = [
+            r'href\s*=\s*["\'][^"\']*'
+            r'page[-=]'
+            r'\d+[^"\']*["\']',
+
+
+
+
+            r'"page"\s*:\s*'
+            r'["\']?'
+            r'\d+',
+
+
+
+
+            r'"hasNext"\s*:\s*true',
+
+
+
+
+            r'"has_next"\s*:\s*true',
+
+
+
+
+            r'"next"\s*:\s*',
+        ]
+
+
+
+
+        for pattern in next_patterns:
+
+
+
+
+            if re.search(
+                pattern,
+                page_html,
+                re.IGNORECASE,
+            ):
+                return True
+
+
+
+
+        return False
 
 
 
@@ -4783,6 +5235,10 @@ class RutubeScrapper:
         logging.info(
             "TV DISCOVERY PROCESSING %d RECORDS",
             total,
+        )
+        logging.info(
+            "TV DISCOVERY PROCESSING: every discovered TV card is resolved; "
+            "no first-N channel truncation is applied",
         )
 
 
@@ -6953,6 +7409,26 @@ def write_tv_jsonl(
 
 
 # ============================================================
+# OUTPUT PATHS
+# ============================================================
+
+def _safe_output_path(output_dir: Path, filename: str) -> Path:
+    """Never overwrite an existing Rutube result file."""
+    output_dir.mkdir(parents=True, exist_ok=True)
+    candidate = output_dir / filename
+    if not candidate.exists():
+        return candidate
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+    base = output_dir / f"{candidate.stem}_{stamp}{candidate.suffix}"
+    candidate = base
+    n = 2
+    while candidate.exists():
+        candidate = output_dir / f"{base.stem}_{n}{base.suffix}"
+        n += 1
+    return candidate
+
+
+# ============================================================
 # LOGGING
 # ============================================================
 
@@ -6974,10 +7450,7 @@ def setup_logging(
 
 
 
-    log_file = (
-        output_dir
-        / "scraper.log"
-    )
+    log_file = _safe_output_path(output_dir, "scraper.log")
 
 
 
@@ -7020,135 +7493,19 @@ def write_tv_outputs(
     report: Dict[str, Any],
     scraper: RutubeScrapper,
 ):
-
-
-
-
-    output_dir.mkdir(
-        parents=True,
-        exist_ok=True,
-    )
-
-
-
-
-    # --------------------------------------------------------
-    # JSON
-    # --------------------------------------------------------
-
-
-
-
-    write_json(
-        output_dir / JSON_FILENAME,
-        report,
-    )
-
-
-
-
-    # --------------------------------------------------------
-    # M3U
-    # --------------------------------------------------------
-
-
-
-
-    m3u_text = (
-        scraper.make_tv_m3u(
-            report[
-                "channels"
-            ]
-        )
-    )
-
-
-
-
-    write_text(
-        output_dir / M3U_FILENAME,
-        m3u_text,
-    )
-
-
-
-
-    # --------------------------------------------------------
-    # JSONL
-    # --------------------------------------------------------
-
-
-
-
-    write_tv_jsonl(
-        output_dir / JSONL_FILENAME,
-        report,
-    )
-
-
-
-
-    # --------------------------------------------------------
-    # TXT
-    # --------------------------------------------------------
-
-
-
-
-    write_text(
-        output_dir / TXT_FILENAME,
-        scraper.make_tv_txt(
-            report
-        ),
-    )
-
-
-
-
-    # --------------------------------------------------------
-    # DISCOVERY DEBUG HTML
-    #
-    # Не обязателен для работы.
-    # Оставляем небольшой служебный файл.
-    # --------------------------------------------------------
-
-
-
-
-    logging.info(
-        "JSON: %s",
-        output_dir / JSON_FILENAME,
-    )
-
-
-
-
-    logging.info(
-        "M3U: %s",
-        output_dir / M3U_FILENAME,
-    )
-
-
-
-
-    logging.info(
-        "JSONL: %s",
-        output_dir / JSONL_FILENAME,
-    )
-
-
-
-
-    logging.info(
-        "TXT: %s",
-        output_dir / TXT_FILENAME,
-    )
-
-
-
-
-
-
+    output_dir.mkdir(parents=True, exist_ok=True)
+    json_path = _safe_output_path(output_dir, JSON_FILENAME)
+    m3u_path = _safe_output_path(output_dir, M3U_FILENAME)
+    jsonl_path = _safe_output_path(output_dir, JSONL_FILENAME)
+    txt_path = _safe_output_path(output_dir, TXT_FILENAME)
+    write_json(json_path, report)
+    write_text(m3u_path, scraper.make_tv_m3u(report["channels"]))
+    write_tv_jsonl(jsonl_path, report)
+    write_text(txt_path, scraper.make_tv_txt(report))
+    logging.info("JSON: %s", json_path)
+    logging.info("M3U: %s", m3u_path)
+    logging.info("JSONL: %s", jsonl_path)
+    logging.info("TXT: %s", txt_path)
 
 
 # ============================================================
