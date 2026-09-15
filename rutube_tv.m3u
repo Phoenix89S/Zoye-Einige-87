@@ -1,4 +1,4 @@
-#EXTM3U url-tvg="https://iptvx.one/EPG"
+то#EXTM3U url-tvg="https://iptvx.one/EPG"
 #EXTINF:-1 tvg-id="rutube_9ae8e8a6dc58bdad66190475f9872ecd" tvg-name="Rutube TV" group-title="Рутуб кабельная" tvg-group="Рутуб кабельная/Все эфиры" subgroup-title="Все эфиры",0.1 Rutube TV
 #EXTVLCOPT:http-user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36
 https://bl.rutube.ru/livestream/9ae8e8a6dc58bdad66190475f9872ecd/index.m3u8?s=rb0ezrfRKIySfLqM7VJkQw&e=2089472521&scheme=https
@@ -65,10 +65,10 @@ https://bl.rutube.ru/livestream/88f6485ee28d56daf13302ac6fe3d931/index.m3u8?s=H7
 #EXTINF:-1 tvg-id="rutube_88f6485ee28d56daf13302ac6fe3d931" tvg-name="38.2 РБК" group-title="Рутуб кабельная" tvg-group="Рутуб кабельная/Все эфиры" subgroup-title="Все эфиры" tvg-logo="https://pic.rtbcdn.ru/user/2025-08-26/9b/d9/9bd9372e6d0f3a93cc41df3660133ad2.jpg",38.2 РБК
 #EXTVLCOPT:http-user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36
 https://bl.rutube.ru/livestream/88f6485ee28d56daf13302ac6fe3d931/index.m3u8?s=H72dl6CUnb7BzPVzGWYIRg&e=2089472538&scheme=https
-#EXTINF:-1 tvg-id="rutube_5bbff90167d1b1d88fda92376ec7a651" tvg-name="Автор покинул недружественные платформы" group-title="Рутуб кабельная" tvg-group="Рутуб кабельная/Все эфиры" subgroup-title="Все эфиры" tvg-logo="https://pic.rtbcdn.ru/user/1f/79/1f7921d6d623ef9459152aefef2dd3e7.jpg",Автор покинул недружественные платформы
+#EXTINF:-1 tvg-id="rutube_5bbff90167d1b1d88fda92376ec7a651" tvg-name="Че" group-title="Рутуб кабельная" tvg-group="Рутуб кабельная/Все эфиры" subgroup-title="Все эфиры" tvg-logo="https://pic.rtbcdn.ru/user/1f/79/1f7921d6d623ef9459152aefef2dd3e7.jpg",77.1 Че
 #EXTVLCOPT:http-user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36
 https://bl.rutube.ru/livestream/5bbff90167d1b1d88fda92376ec7a651/index.m3u8?s=ofDiK2FzIXCIMEQsUSVIRw&e=2089472539&scheme=https
-#EXTINF:-1 tvg-id="rutube_5bbff90167d1b1d88fda92376ec7a651" tvg-name="Автор покинул недружественные платформы" group-title="Рутуб кабельная" tvg-group="Рутуб кабельная/Все эфиры" subgroup-title="Все эфиры" tvg-logo="https://pic.rtbcdn.ru/user/1f/79/1f7921d6d623ef9459152aefef2dd3e7.jpg",Автор покинул недружественные платформы
+#EXTINF:-1 tvg-id="rutube_5bbff90167d1b1d88fda92376ec7a651" tvg-name="Че" group-title="Рутуб кабельная" tvg-group="Рутуб кабельная/Все эфиры" subgroup-title="Все эфиры" tvg-logo="https://pic.rtbcdn.ru/user/1f/79/1f7921d6d623ef9459152aefef2dd3e7.jpg",77.2 Че
 #EXTVLCOPT:http-user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36
 https://bl.rutube.ru/livestream/5bbff90167d1b1d88fda92376ec7a651/index.m3u8?s=ofDiK2FzIXCIMEQsUSVIRw&e=2089472539&scheme=https
 #EXTINF:-1 tvg-id="rutube_faa934385b83f9e8a92f5484defae5fa" tvg-name="Официальный канал" group-title="Рутуб кабельная" tvg-group="Рутуб кабельная/Все эфиры" subgroup-title="Все эфиры" tvg-logo="https://pic.rtbcdn.ru/user/2025-04-02/9f/6c/9f6ce6521ba7b5cc82aa668c5feb9544.jpg",Официальный канал
